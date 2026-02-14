@@ -18,7 +18,7 @@ class InfoView extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Information', style: TextStyle(color: Colors.white)),
+        title: const Text('Информация', style: TextStyle(color: Colors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
@@ -58,14 +58,14 @@ class InfoView extends StatelessWidget {
             ),
             const Center(
               child: Text(
-                'Version 1.0.0',
+                'Версия 1.0.0',
                 style: TextStyle(color: Colors.grey, fontSize: 14),
               ),
             ),
             const SizedBox(height: 40),
-            _buildSectionTitle('Description'),
+            _buildSectionTitle('Описание'),
             const Text(
-              'A simple and efficient tool to monitor the status of Li Auto service hosts in real-time. Designed for developers and service technicians.',
+              'Простой и эффективный инструмент для мониторинга доступности хостов Li Auto в режиме реального времени. Предназначен для разработчиков и технических специалистов.',
               style: TextStyle(
                 color: Colors.white70,
                 height: 1.5,
@@ -73,7 +73,7 @@ class InfoView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            _buildSectionTitle('Developer'),
+            _buildSectionTitle('Разработчик'),
             InkWell(
               onTap: _launchTelegram,
               borderRadius: BorderRadius.circular(12),
@@ -92,7 +92,7 @@ class InfoView extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Telegram Support',
+                          'Поддержка в Telegram',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,

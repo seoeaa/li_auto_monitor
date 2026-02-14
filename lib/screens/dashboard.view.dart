@@ -39,7 +39,7 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ),
             Text(
-              'Real-time Service Availability',
+              'Мониторинг сервисов',
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],
@@ -73,7 +73,7 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
                 child: Center(
                   child: Text(
-                    monitor.isMonitoring ? 'LIVE' : 'PAUSED',
+                    monitor.isMonitoring ? 'ЖИВОЙ' : 'ПАУЗА',
                     style: TextStyle(
                       color: monitor.isMonitoring
                           ? const Color(0xFF00FFC2)

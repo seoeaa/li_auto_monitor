@@ -1,15 +1,15 @@
 # Li Auto Monitor
 
-Flutter application for real-time monitoring of Li Auto service availability.
+Flutter-приложение для мониторинга доступности сервисов Li Auto в режиме реального времени.
 
-## Features
+## Особенности
 
-- **Real-time Monitoring**: Pings essential Li Auto hosts every 30 seconds.
-- **Premium UI**: Modern dark theme with glassmorphism effects.
-- **Cross-platform**: Supports Linux and Android.
-- **Automated**: Starts monitoring automatically on launch.
+- **Мониторинг в реальном времени**: Пинг основных хостов Li Auto каждые 30 секунд.
+- **Премиальный интерфейс**: Современная темная тема с эффектами стекла.
+- **Кроссплатформенность**: Поддержка Linux и Android.
+- **Автоматизация**: Мониторинг запускается автоматически при открытии приложения.
 
-## Monitored Hosts
+## Мониторируемые хосты
 
 - api-hmi-cnnx01.chehejia.com (OTA MA JWT)
 - api-hmi.chehejia.com (OTA Production)
@@ -19,10 +19,10 @@ Flutter application for real-time monitoring of Li Auto service availability.
 - id.lixiang.com (Li Auto Auth)
 - li.auto (Li API Base)
 
-## Developer
+## Разработчик
 
 Telegram: [@slaveaa](https://t.me/slaveaa)
 
-## License
+## Лицензия
 
 MIT
