@@ -89,6 +89,15 @@ class _HostCardState extends State<HostCard> {
                     fontSize: 12,
                   ),
                 ),
+                if (widget.host.resolvedIp != null)
+                  Text(
+                    'IP: ${widget.host.resolvedIp}',
+                    style: const TextStyle(
+                      color: Color(0xFF00FFC2),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 if (widget.host.errorMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),

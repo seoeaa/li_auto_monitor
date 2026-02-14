@@ -60,8 +60,12 @@ class MonitorService extends ChangeNotifier {
 
       if (event.response != null) {
         status.rtt = event.response!.time?.inMilliseconds.toDouble();
+        status.resolvedIp = event.response!.ip
+            ?.replaceAll('(', '')
+            .replaceAll(')', '')
+            .trim();
         status.hops = [
-          HopInfo(number: 1, ip: event.response!.ip, time: status.rtt),
+          HopInfo(number: 1, ip: status.resolvedIp, time: status.rtt),
         ];
       }
     } catch (_) {
@@ -97,7 +101,10 @@ class MonitorService extends ChangeNotifier {
             .timeout(const Duration(seconds: 3));
 
         if (event.response != null && event.response!.ip != null) {
-          final ip = event.response!.ip!;
+          // Clean IP from brackets if present (e.g. "(1.2.3.4)")
+          final rawIp = event.response!.ip!;
+          final ip = rawIp.replaceAll('(', '').replaceAll(')', '').trim();
+
           final time = event.response!.time?.inMilliseconds.toDouble() ?? 0;
 
           final hop = HopInfo(

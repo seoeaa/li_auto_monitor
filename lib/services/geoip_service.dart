@@ -25,7 +25,7 @@ class GeoIPService {
           final ip = validIps[i];
           if (item['status'] == 'success') {
             results[ip!] = {
-              'country': item['countryCode'] ?? '??',
+              'country': item['country'] ?? '??',
               'isp': item['isp'] ?? 'Unknown ISP',
             };
           }
