@@ -3,8 +3,8 @@
 Эта программа выполняет анализ соединения с серверами Li Auto (OTA, авторизация, диагностика). В отличие от обычного "пинга", она использует TCP-трассировку, имитируя реальный трафик приложений, что позволяет находить проблемы даже за сложными фаерволами.
 
 <p align="center">
-  <img src="photo_2026-02-14_10-31-13.jpg" width="300" alt="Mobile Screenshot">
-  <img src="linux_pc.png" width="500" alt="Linux Screenshot">
+  <img src="photo_2026-02-14_10-31-13.jpg" height="350" alt="Mobile Screenshot">
+  <img src="linux_pc.png" height="350" alt="Linux Screenshot">
 </p>
 
 ## 📥 Скачать
