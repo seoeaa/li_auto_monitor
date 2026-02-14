@@ -1,0 +1,59 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Multi-Platform
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Build iOS IPA (unsigned)
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          zip -r LiAutoMonitor.ipa Payload
+          rm -rf Payload
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            LiAutoMonitor.ipa
+          name: Release ${{ github.ref_name }}
+          body: |
+            Автоматическая сборка Li Auto Monitor.
+            
+            ### Артефакты:
+            - **Android**: `app-release.apk`
+            - **iOS**: `LiAutoMonitor.ipa` (unsigned, для установки через AltStore/SideStore)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
