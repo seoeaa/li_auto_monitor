@@ -65,12 +65,17 @@ class InfoView extends StatelessWidget {
             const SizedBox(height: 40),
             _buildSectionTitle('Описание'),
             const Text(
-              'Простой и эффективный инструмент для мониторинга доступности хостов Li Auto в режиме реального времени. Предназначен для разработчиков и технических специалистов.',
+              'Программа выполняет анализ соединения с серверами Li Auto (OTA, авторизация, диагностика). В отличие от обычного "пинга", используется TCP-трассировка, имитирующая реальный трафик приложений, что позволяет находить проблемы даже за сложными фаерволами.',
               style: TextStyle(
                 color: Colors.white70,
                 height: 1.5,
                 fontSize: 16,
               ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '• Проводит анализ маршрута\n• GeoIP определение узлов\n• Обход блокировок (TCP SYN 443)',
+              style: TextStyle(color: Color(0xFF00FFC2), fontSize: 14),
             ),
             const SizedBox(height: 32),
             _buildSectionTitle('Разработчик'),
