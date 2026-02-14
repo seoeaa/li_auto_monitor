@@ -54,12 +54,15 @@ class _HostCardState extends State<HostCard> {
             leading: _buildStatusIndicator(widget.host.state),
             title: Row(
               children: [
-                Text(
-                  widget.host.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                Flexible(
+                  child: Text(
+                    widget.host.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),

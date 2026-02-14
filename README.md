@@ -2,6 +2,8 @@
 
 Эта программа выполняет анализ соединения с серверами Li Auto (OTA, авторизация, диагностика). В отличие от обычного "пинга", она использует TCP-трассировку, имитируя реальный трафик приложений, что позволяет находить проблемы даже за сложными фаерволами.
 
+![Screenshot](photo_2026-02-14_10-31-13.jpg)
+
 ## 📥 Скачать
 ### Android
 Вы можете скачать последнюю версию приложения здесь:
@@ -12,7 +14,10 @@
 1. Скачайте **[LiAutoMonitor.ipa](https://github.com/seoeaa/li_auto_monitor/releases/latest/download/LiAutoMonitor.ipa)**.
 2. **Для Linux пользователей**: Используйте **[AltServer-Linux](https://github.com/NyaMisty/AltServer-Linux)** или **SideServer-Linux** для первой установки.
 3. После установки **SideStore** на телефон, вы сможете обновлять приложение прямо с iPhone без компьютера (через Wi-Fi).
-4. Билд не подписан (unsigned), так как проект является open-source.
+
+### Desktop
+- **Windows**: **[LiAutoMonitor-Windows.zip](https://github.com/seoeaa/li_auto_monitor/releases/latest/download/LiAutoMonitor-Windows.zip)**
+- **Linux**: **[LiAutoMonitor-Linux.tar.gz](https://github.com/seoeaa/li_auto_monitor/releases/latest/download/LiAutoMonitor-Linux.tar.gz)**
 
 ## ✨ Возможности
 

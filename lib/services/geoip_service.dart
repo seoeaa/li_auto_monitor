@@ -13,10 +13,9 @@ class GeoIPService {
     if (validIps.isEmpty) return results;
 
     try {
-      final response = await http.post(
-        Uri.parse(_apiEndpoint),
-        body: jsonEncode(validIps),
-      );
+      final response = await http
+          .post(Uri.parse(_apiEndpoint), body: jsonEncode(validIps))
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
