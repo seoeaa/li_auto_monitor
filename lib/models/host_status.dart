@@ -31,6 +31,7 @@ class HostStatus {
   double? rtt;
   String? errorMessage;
   String? resolvedIp;
+  String? resolvedCountry;
   DateTime? lastChecked;
   List<HopInfo> hops;
   bool isTcpAvailable;
@@ -44,6 +45,7 @@ class HostStatus {
     this.rtt,
     this.errorMessage,
     this.resolvedIp,
+    this.resolvedCountry,
     this.lastChecked,
     List<HopInfo>? hops,
     this.isTcpAvailable = false,

@@ -91,7 +91,7 @@ class _HostCardState extends State<HostCard> {
                 ),
                 if (widget.host.resolvedIp != null)
                   Text(
-                    'IP: ${widget.host.resolvedIp}',
+                    'IP: ${widget.host.resolvedIp} ${widget.host.resolvedCountry != null ? "(${widget.host.resolvedCountry})" : ""}',
                     style: const TextStyle(
                       color: Color(0xFF00FFC2),
                       fontSize: 10,

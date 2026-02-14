@@ -64,8 +64,22 @@ class MonitorService extends ChangeNotifier {
             ?.replaceAll('(', '')
             .replaceAll(')', '')
             .trim();
+
+        // Fetch GeoIP for the resolved IP
+        if (status.resolvedIp != null) {
+          final geo = await GeoIPService.getBatchLocation([status.resolvedIp!]);
+          if (geo.containsKey(status.resolvedIp)) {
+            status.resolvedCountry = geo[status.resolvedIp!]!['country'];
+          }
+        }
+
         status.hops = [
-          HopInfo(number: 1, ip: status.resolvedIp, time: status.rtt),
+          HopInfo(
+            number: 1,
+            ip: status.resolvedIp,
+            time: status.rtt,
+            country: status.resolvedCountry,
+          ),
         ];
       }
     } catch (_) {
