@@ -5,9 +5,14 @@
 
 Программно-диагностический комплекс для глубокого анализа сетевой инфраструктуры **Li Auto** (сервисы OTA, подсистемы авторизации и телеметрии). В отличие от тривиальных методов проверки доступности, приложение реализует имитацию реальных паттернов трафика через TCP-трассировку, что позволяет идентифицировать деградацию связи на уровне прикладных протоколов даже за многоуровневыми межсетевыми экранами.
 
-<p align="center">
-  <img src="mobile.png" height="380" alt="Mobile Screenshot"> <img src="pc.png" height="380" alt="Linux Screenshot">
-</p>
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="mobile.png" height="380" alt="Mobile Screenshot"></td>
+      <td><img src="pc.png" height="380" alt="Linux Screenshot"></td>
+    </tr>
+  </table>
+</div>
 
 ---
 
