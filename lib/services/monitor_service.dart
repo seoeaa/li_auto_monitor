@@ -132,14 +132,27 @@ class MonitorService extends ChangeNotifier {
 
       final ping = Ping(status.host, count: 1, ttl: ttl, timeout: 2);
       try {
-        final event = await ping.stream
-            .firstWhere((e) => e.response != null || e.error != null)
-            .timeout(const Duration(seconds: 3));
+        PingResponse? hopResponse;
 
-        if (event.response != null && event.response!.ip != null) {
-          final rawIp = event.response!.ip!;
+        await for (final event in ping.stream.timeout(
+          const Duration(seconds: 3),
+        )) {
+          if (event.response != null) {
+            // On some platforms, we get multiple events.
+            // We want the one that actually has an IP.
+            if (event.response!.ip != null) {
+              hopResponse = event.response;
+              break;
+            }
+          }
+          if (event.error != null) break;
+          if (event.summary != null) break;
+        }
+
+        if (hopResponse != null && hopResponse.ip != null) {
+          final rawIp = hopResponse.ip!;
           final ip = rawIp.replaceAll(_bracketRegex, '').trim();
-          final time = event.response!.time?.inMilliseconds.toDouble() ?? 0;
+          final time = hopResponse.time?.inMilliseconds.toDouble() ?? 0;
 
           final hop = HopInfo(
             number: ttl,
@@ -150,8 +163,10 @@ class MonitorService extends ChangeNotifier {
           ipsToQuery.add(ip);
           status.updateHops((hops) => hops.add(hop));
 
-          // If we reached the destination
-          if (event.error == null) {
+          // If we reached the destination (RTT will be present and no error in response)
+          // Actually, dart_ping doesn't usually set error in response for TTL exceeded.
+          // If the IP matches the resolved IP of the host, we might be done.
+          if (ip == status.resolvedIp) {
             break;
           }
         } else {
