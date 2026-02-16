@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'theme/app_theme.dart';
 import 'services/monitor_service.dart';
 import 'screens/dashboard.view.dart';
+import 'utils/logger.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppLogger.init();
+
+  // Set system UI overlay style for modern dark look
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: AppTheme.backgroundDark,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+
   runApp(
     MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => MonitorService())],
@@ -20,13 +36,7 @@ class LiAutoMonitorApp extends StatelessWidget {
     return MaterialApp(
       title: 'Li Auto Monitor',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFF00FFC2),
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        fontFamily: 'Roboto', // Default but consistent
-        useMaterial3: true,
-      ),
+      theme: AppTheme.darkTheme,
       home: const DashboardView(),
     );
   }

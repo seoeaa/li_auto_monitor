@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/host_status.dart';
 import '../services/monitor_service.dart';
+import '../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'traceroute_details.dart';
 
 class HostCard extends StatefulWidget {
   final HostStatus host;
@@ -13,97 +15,202 @@ class HostCard extends StatefulWidget {
   State<HostCard> createState() => _HostCardState();
 }
 
-class _HostCardState extends State<HostCard> {
+class _HostCardState extends State<HostCard>
+    with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
+  late AnimationController _expandController;
+  late Animation<double> _expandAnimation;
+
+  static final _timeFormat = DateFormat('HH:mm:ss');
+
+  @override
+  void initState() {
+    super.initState();
+    _expandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _expandController,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _expandController.dispose();
+    super.dispose();
+  }
+
+  void _toggleExpand() {
+    setState(() => _isExpanded = !_isExpanded);
+    if (_isExpanded) {
+      _expandController.forward();
+      if (!widget.host.isTracing) {
+        Provider.of<MonitorService>(
+          context,
+          listen: false,
+        ).traceHost(widget.host);
+      }
+    } else {
+      _expandController.reverse();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _getStatusColor(widget.host.state);
-    final timeStr = widget.host.lastChecked != null
-        ? DateFormat('HH:mm:ss').format(widget.host.lastChecked!)
-        : '--:--:--';
+    return ListenableBuilder(
+      listenable: widget.host,
+      builder: (context, _) {
+        final statusColor = _getStatusColor(widget.host.state);
+        final timeStr = widget.host.lastChecked != null
+            ? _timeFormat.format(widget.host.lastChecked!)
+            : '--:--:--';
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor.withOpacity(0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: statusColor.withOpacity(0.1),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          ListTile(
-            onTap: () {
-              setState(() => _isExpanded = !_isExpanded);
-              if (_isExpanded && !widget.host.isTracing) {
-                Provider.of<MonitorService>(
-                  context,
-                  listen: false,
-                ).traceHost(widget.host);
-              }
-            },
-            contentPadding: const EdgeInsets.all(16),
-            leading: _buildStatusIndicator(widget.host.state),
-            title: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    widget.host.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    widget.host.category,
-                    style: const TextStyle(color: Colors.white60, fontSize: 10),
-                  ),
+        return GestureDetector(
+          onTap: _toggleExpand,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOutCubic,
+            decoration: BoxDecoration(
+              gradient: AppTheme.cardGradient,
+              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
+              border: Border.all(color: statusColor.withOpacity(0.2), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: statusColor.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            subtitle: Column(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
+              child: Row(
+                children: [
+                  // Vertical status bar
+                  Container(
+                    width: 4,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        bottomLeft: Radius.circular(24),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: statusColor.withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildMainContent(statusColor, timeStr),
+                        SizeTransition(
+                          sizeFactor: _expandAnimation,
+                          child: TracerouteDetails(host: widget.host),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMainContent(Color statusColor, String timeStr) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Host info
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
+                  widget.host.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    letterSpacing: -0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                _buildCategoryBadge(),
+                const SizedBox(height: 6),
+                Text(
                   widget.host.host,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.45),
+                    fontSize: 13,
                   ),
                 ),
-                if (widget.host.resolvedIp != null)
-                  Text(
-                    'IP: ${widget.host.resolvedIp} ${widget.host.resolvedCountry != null ? "(${widget.host.resolvedCountry})" : ""}',
-                    style: const TextStyle(
-                      color: Color(0xFF00FFC2),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
+                if (widget.host.resolvedIp != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: AppTheme.primaryCyan.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${widget.host.resolvedIp}',
+                        style: const TextStyle(
+                          color: AppTheme.primaryCyan,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (widget.host.resolvedCountry != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryCyan.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            widget.host.resolvedCountry!,
+                            style: const TextStyle(
+                              color: AppTheme.primaryCyan,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                if (widget.host.errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                ],
+                if (widget.host.errorMessage != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                     child: Text(
                       widget.host.errorMessage!,
                       style: const TextStyle(
@@ -112,178 +219,53 @@ class _HostCardState extends State<HostCard> {
                       ),
                     ),
                   ),
-              ],
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  widget.host.rtt != null
-                      ? '${widget.host.rtt!.toStringAsFixed(1)} ms'
-                      : '-- ms',
-                  style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  timeStr,
-                  style: const TextStyle(color: Colors.white24, fontSize: 10),
-                ),
+                ],
               ],
             ),
           ),
-          if (_isExpanded) _buildTracerouteDetails(),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildTracerouteDetails() {
-    if (widget.host.hops.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Text(
-          'Нет данных трассировки',
-          style: TextStyle(color: Colors.white24),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.black26,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Divider(color: Colors.white10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // RTT & Time
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'АНАЛИЗ МАРШРУТА (TCP TRACE)',
-                  style: TextStyle(
-                    color: Color(0xFF00FFC2),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
+              Text(
+                widget.host.rtt != null
+                    ? widget.host.rtt!.toStringAsFixed(1)
+                    : '--',
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  letterSpacing: -0.5,
                 ),
               ),
-              if (widget.host.isTracing)
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF00FFC2),
-                  ),
+              Text(
+                'ms',
+                style: TextStyle(
+                  color: statusColor.withOpacity(0.6),
+                  fontSize: 11,
                 ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                timeStr,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.25),
+                  fontSize: 10,
+                ),
+              ),
             ],
           ),
-          if (widget.host.hops.isEmpty && widget.host.isTracing)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  'Запуск трассировки...',
-                  style: TextStyle(color: Colors.white24, fontSize: 12),
-                ),
-              ),
-            ),
-          ...widget.host.hops.map((hop) => _buildHopRow(hop)),
-          const SizedBox(height: 8),
-          _buildTcpStatus(),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildHopRow(HopInfo hop) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24,
-            child: Text(
-              '${hop.number}',
-              style: const TextStyle(color: Colors.white24, fontSize: 11),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hop.ip ?? '*',
-                  style: TextStyle(
-                    color: hop.isSuccessful
-                        ? Colors.white70
-                        : Colors.red.withOpacity(0.5),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-                if (hop.isp != null)
-                  Text(
-                    hop.isp!,
-                    style: const TextStyle(color: Colors.white24, fontSize: 9),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-          ),
-          if (hop.country != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                hop.country!,
-                style: const TextStyle(color: Color(0xFF00FFC2), fontSize: 10),
-              ),
-            ),
-          Text(
-            hop.time != null ? '${hop.time!.toStringAsFixed(1)}ms' : '*',
-            style: const TextStyle(color: Colors.white38, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTcpStatus() {
-    return Container(
-      margin: const EdgeInsets.only(top: 8, bottom: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: widget.host.isTcpAvailable
-            ? Colors.green.withOpacity(0.1)
-            : Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            widget.host.isTcpAvailable ? Icons.check_circle : Icons.error,
-            size: 14,
-            color: widget.host.isTcpAvailable ? Colors.green : Colors.red,
-          ),
           const SizedBox(width: 8),
-          Text(
-            widget.host.isTcpAvailable
-                ? 'TCP ПОРТ 443 ДОСТУПЕН'
-                : 'TCP ПОРТ 443 ЗАБЛОКИРОВАН',
-            style: TextStyle(
-              color: widget.host.isTcpAvailable ? Colors.green : Colors.red,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+          // Expand indicator
+          AnimatedRotation(
+            turns: _isExpanded ? 0.5 : 0,
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              Icons.keyboard_arrow_down,
+              color: Colors.white.withOpacity(0.3),
+              size: 24,
             ),
           ),
         ],
@@ -291,21 +273,21 @@ class _HostCardState extends State<HostCard> {
     );
   }
 
-  Widget _buildStatusIndicator(HostState state) {
-    final color = _getStatusColor(state);
+  Widget _buildCategoryBadge() {
     return Container(
-      width: 12,
-      height: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.5),
-            blurRadius: 6,
-            spreadRadius: 1,
-          ),
-        ],
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+      ),
+      child: Text(
+        widget.host.category,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.5),
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -313,11 +295,11 @@ class _HostCardState extends State<HostCard> {
   Color _getStatusColor(HostState state) {
     switch (state) {
       case HostState.online:
-        return const Color(0xFF00FFC2);
+        return AppTheme.statusOnline;
       case HostState.down:
-        return Colors.redAccent;
+        return AppTheme.statusDown;
       case HostState.unknown:
-        return Colors.orangeAccent;
+        return AppTheme.statusUnknown;
     }
   }
 }

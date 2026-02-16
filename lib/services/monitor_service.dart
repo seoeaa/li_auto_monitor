@@ -4,23 +4,24 @@ import 'package:flutter/foundation.dart';
 import 'package:dart_ping/dart_ping.dart';
 import '../models/host_status.dart';
 import 'geoip_service.dart';
+import '../config/hosts_config.dart';
 
 class MonitorService extends ChangeNotifier {
-  List<HostStatus> _hosts = [
-    HostStatus.unknown('OTA', 'OTA MA JWT', 'api-hmi-cnnx01.chehejia.com'),
-    HostStatus.unknown('OTA', 'OTA Production', 'api-hmi.chehejia.com'),
-    HostStatus.unknown('OTA', 'OTA Test', 'api-hmi-test.chehejia.com'),
-    HostStatus.unknown(
-      'OTA',
-      'OTA OnTest',
-      'iot-api-hmi-ontest-b.chehejia.com',
-    ),
-    HostStatus.unknown('APP', 'App Diagnosis', 'api-app.lixiang.com'),
-    HostStatus.unknown('APP', 'Li Auto Auth', 'id.lixiang.com'),
-    HostStatus.unknown('APP', 'Li API Base', 'li.auto'),
-  ];
+  late final List<HostStatus> _hosts;
+
+  MonitorService({List<HostStatus>? initialHosts}) {
+    _hosts =
+        initialHosts ??
+        HostsConfig.defaultHosts
+            .map(
+              (h) => HostStatus.unknown(h['category']!, h['name']!, h['host']!),
+            )
+            .toList();
+  }
   bool _isMonitoring = false;
   Timer? _timer;
+
+  static final _bracketRegex = RegExp(r'[\(\)]');
 
   List<HostStatus> get hosts => _hosts;
   bool get isMonitoring => _isMonitoring;
@@ -61,8 +62,7 @@ class MonitorService extends ChangeNotifier {
       if (event.response != null) {
         status.rtt = event.response!.time?.inMilliseconds.toDouble();
         status.resolvedIp = event.response!.ip
-            ?.replaceAll('(', '')
-            .replaceAll(')', '')
+            ?.replaceAll(_bracketRegex, '')
             .trim();
 
         // Fetch GeoIP for the resolved IP
@@ -96,7 +96,6 @@ class MonitorService extends ChangeNotifier {
     }
 
     status.lastChecked = DateTime.now();
-    notifyListeners();
   }
 
   Future<void> traceHost(HostStatus status) async {
@@ -117,7 +116,7 @@ class MonitorService extends ChangeNotifier {
         if (event.response != null && event.response!.ip != null) {
           // Clean IP from brackets if present (e.g. "(1.2.3.4)")
           final rawIp = event.response!.ip!;
-          final ip = rawIp.replaceAll('(', '').replaceAll(')', '').trim();
+          final ip = rawIp.replaceAll(_bracketRegex, '').trim();
 
           final time = event.response!.time?.inMilliseconds.toDouble() ?? 0;
 
@@ -134,8 +133,7 @@ class MonitorService extends ChangeNotifier {
             hop.isp = geo[ip]!['isp'];
           }
 
-          status.hops.add(hop);
-          notifyListeners();
+          status.updateHops((hops) => hops.add(hop));
 
           // If it's a successful response (not TTL exceeded), we've reached the destination
           if (event.error == null) {
@@ -143,13 +141,15 @@ class MonitorService extends ChangeNotifier {
           }
         } else {
           // No response for this TTL
-          status.hops.add(HopInfo(number: ttl, ip: null, time: null));
-          notifyListeners();
+          status.updateHops(
+            (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
+          );
         }
       } catch (e) {
         // Timeout or other error
-        status.hops.add(HopInfo(number: ttl, ip: null, time: null));
-        notifyListeners();
+        status.updateHops(
+          (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
+        );
       }
     }
 

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../utils/logger.dart';
+
 class GeoIPService {
   static const String _apiEndpoint = 'http://ip-api.com/batch';
 
@@ -31,7 +33,7 @@ class GeoIPService {
         }
       }
     } catch (e) {
-      print('GeoIP Batch Error: $e');
+      AppLogger.error('GeoIP Batch Error', error: e);
     }
     return results;
   }
