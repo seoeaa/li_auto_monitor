@@ -104,8 +104,10 @@ class MonitorService extends ChangeNotifier {
     status.hops = [];
     notifyListeners();
 
+    final Set<String> ipsToQuery = {};
+
     for (int ttl = 1; ttl <= 20; ttl++) {
-      if (!status.isTracing) break; // Allow stopping?
+      if (!status.isTracing) break;
 
       final ping = Ping(status.host, count: 1, ttl: ttl, timeout: 2);
       try {
@@ -114,10 +116,8 @@ class MonitorService extends ChangeNotifier {
             .timeout(const Duration(seconds: 3));
 
         if (event.response != null && event.response!.ip != null) {
-          // Clean IP from brackets if present (e.g. "(1.2.3.4)")
           final rawIp = event.response!.ip!;
           final ip = rawIp.replaceAll(_bracketRegex, '').trim();
-
           final time = event.response!.time?.inMilliseconds.toDouble() ?? 0;
 
           final hop = HopInfo(
@@ -126,31 +126,35 @@ class MonitorService extends ChangeNotifier {
             time: time > 0 ? time : null,
           );
 
-          // Get GeoIP
-          final geo = await GeoIPService.getBatchLocation([ip]);
-          if (geo.containsKey(ip)) {
-            hop.country = geo[ip]!['country'];
-            hop.isp = geo[ip]!['isp'];
-          }
-
+          ipsToQuery.add(ip);
           status.updateHops((hops) => hops.add(hop));
 
-          // If it's a successful response (not TTL exceeded), we've reached the destination
+          // If we reached the destination
           if (event.error == null) {
             break;
           }
         } else {
-          // No response for this TTL
           status.updateHops(
             (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
           );
         }
       } catch (e) {
-        // Timeout or other error
         status.updateHops(
           (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
         );
       }
+    }
+
+    // After tracing is done (or stopped), fetch all GeoIP data in one batch
+    if (ipsToQuery.isNotEmpty) {
+      final geo = await GeoIPService.getBatchLocation(ipsToQuery.toList());
+      for (var hop in status.hops) {
+        if (hop.ip != null && geo.containsKey(hop.ip)) {
+          hop.country = geo[hop.ip]!['country'];
+          hop.isp = geo[hop.ip]!['isp'];
+        }
+      }
+      notifyListeners();
     }
 
     status.isTracing = false;
