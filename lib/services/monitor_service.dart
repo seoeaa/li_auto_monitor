@@ -140,15 +140,18 @@ class MonitorService extends ChangeNotifier {
           const Duration(seconds: 3),
         )) {
           AppLogger.debug('Trace Event for ${status.host} (TTL $ttl): $event');
-          if (event.response != null) {
-            // On some platforms, we get multiple events.
-            // We want the one that actually has an IP.
-            if (event.response!.ip != null) {
-              hopResponse = event.response;
-              break;
-            }
+
+          if (event.response != null && event.response!.ip != null) {
+            // We found a hop (either success or TTL exceeded on some platforms)
+            hopResponse = event.response;
+            break;
           }
-          if (event.error != null) break;
+
+          if (event.error != null) {
+            // If the event has an error but no response, it's a real failure for this TTL
+            break;
+          }
+
           if (event.summary != null) break;
         }
 
