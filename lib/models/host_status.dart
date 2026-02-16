@@ -21,6 +21,24 @@ class HopInfo {
 
   bool get isSuccessful => ip != null;
 
+  Map<String, dynamic> toJson() => {
+    'number': number,
+    'ip': ip,
+    'domain': domain,
+    'time': time,
+    'country': country,
+    'isp': isp,
+  };
+
+  factory HopInfo.fromJson(Map<String, dynamic> json) => HopInfo(
+    number: json['number'],
+    ip: json['ip'],
+    domain: json['domain'],
+    time: json['time']?.toDouble(),
+    country: json['country'],
+    isp: json['isp'],
+  );
+
   @override
   String toString() => '$number: $ip ($country) - ${time}ms';
 }
@@ -127,6 +145,40 @@ class HostStatus extends ChangeNotifier {
   void updateHops(void Function(List<HopInfo>) update) {
     update(_hops);
     notifyListeners();
+  }
+
+  bool get isOnline => _state == HostState.online;
+
+  Map<String, dynamic> toJson() => {
+    'category': category,
+    'name': name,
+    'host': host,
+    'state': _state.index,
+    'rtt': _rtt,
+    'errorMessage': _errorMessage,
+    'resolvedIp': _resolvedIp,
+    'resolvedCountry': _resolvedCountry,
+    'lastChecked': _lastChecked?.toIso8601String(),
+    'hops': _hops.map((h) => h.toJson()).toList(),
+    'isTcpAvailable': _isTcpAvailable,
+  };
+
+  factory HostStatus.fromJson(Map<String, dynamic> json) {
+    return HostStatus(
+      category: json['category'],
+      name: json['name'],
+      host: json['host'],
+      state: HostState.values[json['state'] ?? 2],
+      rtt: json['rtt']?.toDouble(),
+      errorMessage: json['errorMessage'],
+      resolvedIp: json['resolvedIp'],
+      resolvedCountry: json['resolvedCountry'],
+      lastChecked: json['lastChecked'] != null
+          ? DateTime.parse(json['lastChecked'])
+          : null,
+      hops: (json['hops'] as List?)?.map((h) => HopInfo.fromJson(h)).toList(),
+      isTcpAvailable: json['isTcpAvailable'] ?? false,
+    );
   }
 
   factory HostStatus.unknown(String category, String name, String host) {

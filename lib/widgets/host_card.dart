@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/host_status.dart';
 import '../services/monitor_service.dart';
@@ -21,6 +22,10 @@ class _HostCardState extends State<HostCard>
   late AnimationController _expandController;
   late Animation<double> _expandAnimation;
 
+  bool _statusChanged = false;
+  HostState? _lastState;
+  Timer? _pulseTimer;
+
   static final _timeFormat = DateFormat('HH:mm:ss');
 
   @override
@@ -34,11 +39,43 @@ class _HostCardState extends State<HostCard>
       parent: _expandController,
       curve: Curves.easeInOutCubic,
     );
+
+    _lastState = widget.host.state;
+    widget.host.addListener(_onHostStateChanged);
+  }
+
+  void _onHostStateChanged() {
+    if (widget.host.state != _lastState) {
+      setState(() {
+        _statusChanged = true;
+        _lastState = widget.host.state;
+      });
+      _pulseTimer?.cancel();
+      _pulseTimer = Timer(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          setState(() {
+            _statusChanged = false;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(HostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.host != widget.host) {
+      oldWidget.host.removeListener(_onHostStateChanged);
+      widget.host.addListener(_onHostStateChanged);
+      _lastState = widget.host.state;
+    }
   }
 
   @override
   void dispose() {
     _expandController.dispose();
+    widget.host.removeListener(_onHostStateChanged);
+    _pulseTimer?.cancel();
     super.dispose();
   }
 
@@ -89,7 +126,9 @@ class _HostCardState extends State<HostCard>
               child: Row(
                 children: [
                   // Vertical status bar
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeInOut,
                     width: 4,
                     height: 100,
                     decoration: BoxDecoration(
@@ -100,9 +139,11 @@ class _HostCardState extends State<HostCard>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: statusColor.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 1,
+                          color: statusColor.withOpacity(
+                            _statusChanged ? 0.8 : 0.5,
+                          ),
+                          blurRadius: _statusChanged ? 24 : 8,
+                          spreadRadius: _statusChanged ? 4 : 1,
                         ),
                       ],
                     ),
@@ -153,8 +194,8 @@ class _HostCardState extends State<HostCard>
                 const SizedBox(height: 6),
                 Text(
                   widget.host.host,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.45),
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
                     fontSize: 13,
                   ),
                 ),
@@ -249,8 +290,8 @@ class _HostCardState extends State<HostCard>
               const SizedBox(height: 8),
               Text(
                 timeStr,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.25),
+                style: const TextStyle(
+                  color: AppTheme.textTertiary,
                   fontSize: 10,
                 ),
               ),
@@ -262,9 +303,9 @@ class _HostCardState extends State<HostCard>
           AnimatedRotation(
             turns: _isExpanded ? 0.5 : 0,
             duration: const Duration(milliseconds: 300),
-            child: Icon(
+            child: const Icon(
               Icons.keyboard_arrow_down,
-              color: Colors.white.withOpacity(0.3),
+              color: AppTheme.textSecondary,
               size: 24,
             ),
           ),
@@ -283,8 +324,8 @@ class _HostCardState extends State<HostCard>
       ),
       child: Text(
         widget.host.category,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.5),
+        style: const TextStyle(
+          color: AppTheme.textSecondary,
           fontSize: 10,
           fontWeight: FontWeight.w500,
         ),

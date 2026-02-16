@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../models/host_status.dart';
 import '../services/monitor_service.dart';
 import '../widgets/host_card.dart';
+import '../widgets/history_chart_widget.dart';
 import 'info.view.dart';
 
 class DashboardView extends StatefulWidget {
@@ -49,13 +50,24 @@ class _DashboardViewState extends State<DashboardView>
         body: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                _buildAppBar(),
-                _buildStatsSection(),
-                _buildHostsList(),
-              ],
+            child: RefreshIndicator(
+              onRefresh: () async {
+                final monitor = Provider.of<MonitorService>(
+                  context,
+                  listen: false,
+                );
+                await monitor.refreshAllHosts();
+              },
+              color: AppTheme.primaryCyan,
+              backgroundColor: AppTheme.backgroundCard,
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  _buildAppBar(),
+                  _buildStatsSection(),
+                  _buildHostsList(),
+                ],
+              ),
             ),
           ),
         ),
@@ -96,15 +108,92 @@ class _DashboardViewState extends State<DashboardView>
                     const SizedBox(height: 4),
                     Text(
                       'Мониторинг сервисов',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
                         fontSize: 14,
                       ),
                     ),
                   ],
                 ),
               ),
+              _buildHistoryButton(),
+              const SizedBox(width: 12),
               _buildInfoButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryButton() {
+    return GestureDetector(
+      onTap: () => _showHistoryBottomSheet(),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundCardGlass,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+        ),
+        child: const Icon(Icons.history, color: Colors.white70, size: 22),
+      ),
+    );
+  }
+
+  void _showHistoryBottomSheet() {
+    final monitor = Provider.of<MonitorService>(context, listen: false);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundDark,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXLarge),
+            ),
+            gradient: AppTheme.backgroundGradient,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'История доступности',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  itemCount: monitor.hosts.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    return HistoryChartWidget(host: monitor.hosts[index]);
+                  },
+                  padding: const EdgeInsets.only(bottom: 40),
+                ),
+              ),
             ],
           ),
         ),

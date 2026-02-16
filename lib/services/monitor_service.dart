@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dart_ping/dart_ping.dart';
 import '../models/host_status.dart';
 import 'geoip_service.dart';
+import 'history_service.dart';
 import '../config/hosts_config.dart';
 
 class MonitorService extends ChangeNotifier {
@@ -17,6 +18,7 @@ class MonitorService extends ChangeNotifier {
               (h) => HostStatus.unknown(h['category']!, h['name']!, h['host']!),
             )
             .toList();
+    HistoryService.init();
   }
   bool _isMonitoring = false;
   Timer? _timer;
@@ -38,6 +40,11 @@ class MonitorService extends ChangeNotifier {
   void stopMonitoring() {
     _timer?.cancel();
     _isMonitoring = false;
+    notifyListeners();
+  }
+
+  Future<void> refreshAllHosts() async {
+    await _checkAllHosts();
     notifyListeners();
   }
 
@@ -96,6 +103,9 @@ class MonitorService extends ChangeNotifier {
     }
 
     status.lastChecked = DateTime.now();
+
+    // 4. Save history
+    HistoryService.saveEntry(status.host, status.isOnline);
   }
 
   Future<void> traceHost(HostStatus status) async {

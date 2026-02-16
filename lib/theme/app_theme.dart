@@ -23,7 +23,7 @@ class AppTheme {
   // Text colors
   static const Color textPrimary = Color(0xFFFFFFFF);
   static const Color textSecondary = Color(0xFFA1A1AA);
-  static const Color textTertiary = Color(0xFF71717A);
+  static const Color textTertiary = Color(0xFFD1D1D6);
 
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(

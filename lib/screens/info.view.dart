@@ -163,7 +163,11 @@ class InfoView extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Программа выполняет анализ соединения с серверами Li Auto (OTA, авторизация, диагностика). В отличие от обычного "пинга", используется TCP-трассировка, имитирующая реальный трафик приложений, что позволяет находить проблемы даже за сложными фаерволами.',
-            style: TextStyle(color: Colors.white70, height: 1.6, fontSize: 15),
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              height: 1.6,
+              fontSize: 15,
+            ),
           ),
         ],
       ),
@@ -225,7 +229,7 @@ class InfoView extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
           ),
         ),
       ],
@@ -283,8 +287,8 @@ class InfoView extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '@slaveaa',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -336,7 +340,7 @@ class InfoView extends StatelessWidget {
         const SizedBox(height: 24),
         const Text(
           '© 2026 Li Auto Monitor Team',
-          style: TextStyle(color: Colors.white24, fontSize: 12),
+          style: TextStyle(color: AppTheme.textTertiary, fontSize: 12),
         ),
       ],
     );
