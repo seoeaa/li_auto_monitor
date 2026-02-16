@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dart_ping/dart_ping.dart';
 import '../models/host_status.dart';
 import 'geoip_service.dart';
+import '../utils/logger.dart';
 import 'history_service.dart';
 import '../config/hosts_config.dart';
 
@@ -69,6 +70,7 @@ class MonitorService extends ChangeNotifier {
       await for (final event in ping.stream.timeout(
         const Duration(seconds: 5),
       )) {
+        AppLogger.debug('Ping Event for ${status.host}: $event');
         if (event.response != null) {
           bestResponse = event.response;
           // If we have a response with time, we found what we need.
@@ -137,6 +139,7 @@ class MonitorService extends ChangeNotifier {
         await for (final event in ping.stream.timeout(
           const Duration(seconds: 3),
         )) {
+          AppLogger.debug('Trace Event for ${status.host} (TTL $ttl): $event');
           if (event.response != null) {
             // On some platforms, we get multiple events.
             // We want the one that actually has an IP.
