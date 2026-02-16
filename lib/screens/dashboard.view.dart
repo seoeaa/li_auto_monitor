@@ -447,7 +447,10 @@ class _DashboardViewState extends State<DashboardView>
                 },
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: HostCard(host: hosts[index]),
+                  child: HostCard(
+                    key: ValueKey(hosts[index].host),
+                    host: hosts[index],
+                  ),
                 ),
               );
             }, childCount: hosts.length),

@@ -41,12 +41,18 @@ class GeoIPService {
       // For simplicity, we assume we don't exceed this in one traceroute (usually max 30 hops).
       // If needed, we could chunk ipsToFetch here.
 
+      AppLogger.debug('Fetching GeoIP for: $ipsToFetch');
       final response = await http
-          .post(Uri.parse(_apiEndpoint), body: jsonEncode(ipsToFetch))
+          .post(
+            Uri.parse(_apiEndpoint),
+            body: jsonEncode(ipsToFetch),
+            headers: {'Content-Type': 'application/json'},
+          )
           .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        AppLogger.debug('GeoIP Response: ${response.body}');
         for (int i = 0; i < data.length; i++) {
           final item = data[i];
           final ip = ipsToFetch[i];
