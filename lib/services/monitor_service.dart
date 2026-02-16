@@ -62,13 +62,24 @@ class MonitorService extends ChangeNotifier {
     final ping = Ping(status.host, count: 1);
 
     try {
-      final event = await ping.stream
-          .firstWhere((e) => e.response != null || e.error != null)
-          .timeout(const Duration(seconds: 5));
+      PingResponse? bestResponse;
 
-      if (event.response != null) {
-        status.rtt = event.response!.time?.inMilliseconds.toDouble();
-        status.resolvedIp = event.response!.ip
+      // We listen to the stream for up to 5 seconds.
+      // On some platforms (like Android), the first event might be a header or resolution event without time.
+      await for (final event in ping.stream.timeout(
+        const Duration(seconds: 5),
+      )) {
+        if (event.response != null) {
+          bestResponse = event.response;
+          // If we have a response with time, we found what we need.
+          if (bestResponse?.time != null) break;
+        }
+        if (event.error != null) break;
+      }
+
+      if (bestResponse != null) {
+        status.rtt = bestResponse.time?.inMilliseconds.toDouble();
+        status.resolvedIp = bestResponse.ip
             ?.replaceAll(_bracketRegex, '')
             .trim();
 
