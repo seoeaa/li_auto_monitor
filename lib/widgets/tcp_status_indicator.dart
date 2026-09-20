@@ -77,7 +77,7 @@ class TcpStatusIndicator extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(icon, color: color, size: 16),
