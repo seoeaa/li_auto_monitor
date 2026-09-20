@@ -20,8 +20,8 @@ class HopRow extends StatelessWidget {
             height: 28,
             decoration: BoxDecoration(
               color: isSuccessful
-                  ? AppTheme.primaryCyan.withOpacity(0.1)
-                  : Colors.red.withOpacity(0.1),
+                  ? AppTheme.primaryCyan.withValues(alpha: 0.1)
+                  : Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
@@ -30,7 +30,7 @@ class HopRow extends StatelessWidget {
                 style: TextStyle(
                   color: isSuccessful
                       ? AppTheme.primaryCyan
-                      : Colors.red.withOpacity(0.5),
+                      : Colors.red.withValues(alpha: 0.5),
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -47,7 +47,7 @@ class HopRow extends StatelessWidget {
                   style: TextStyle(
                     color: isSuccessful
                         ? Colors.white70
-                        : Colors.red.withOpacity(0.5),
+                        : Colors.red.withValues(alpha: 0.5),
                     fontSize: 13,
                     fontFamily: 'monospace',
                     fontWeight: FontWeight.w500,
@@ -66,7 +66,7 @@ class HopRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppTheme.primaryCyan.withOpacity(0.1),
+                color: AppTheme.primaryCyan.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -82,13 +82,13 @@ class HopRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               hop.time != null ? '${hop.time!.toStringAsFixed(1)}ms' : '*',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
+                color: Colors.white.withValues(alpha: 0.4),
                 fontSize: 11,
                 fontFamily: 'monospace',
               ),
