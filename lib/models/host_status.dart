@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum HostState { online, down, unknown }
+enum HostState { online, down, unknown, degraded, checking }
 
 class HopInfo {
   final int number;
@@ -56,6 +56,11 @@ class HostStatus extends ChangeNotifier {
   List<HopInfo> _hops;
   bool _isTcpAvailable;
   bool _isTracing;
+  bool? _isDnsAvailable;
+  bool? _isTlsAvailable;
+  bool? _isHttpAvailable;
+  int? _httpStatusCode;
+  String? _diagnosis;
 
   HostStatus({
     required this.category,
@@ -70,6 +75,11 @@ class HostStatus extends ChangeNotifier {
     List<HopInfo>? hops,
     bool isTcpAvailable = false,
     bool isTracing = false,
+    bool? isDnsAvailable,
+    bool? isTlsAvailable,
+    bool? isHttpAvailable,
+    int? httpStatusCode,
+    String? diagnosis,
   }) : _state = state,
        _rtt = rtt,
        _errorMessage = errorMessage,
@@ -78,7 +88,12 @@ class HostStatus extends ChangeNotifier {
        _lastChecked = lastChecked,
        _hops = hops ?? [],
        _isTcpAvailable = isTcpAvailable,
-       _isTracing = isTracing;
+       _isTracing = isTracing,
+       _isDnsAvailable = isDnsAvailable,
+       _isTlsAvailable = isTlsAvailable,
+       _isHttpAvailable = isHttpAvailable,
+       _httpStatusCode = httpStatusCode,
+       _diagnosis = diagnosis;
 
   HostState get state => _state;
   set state(HostState value) {
@@ -142,6 +157,41 @@ class HostStatus extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool? get isDnsAvailable => _isDnsAvailable;
+  set isDnsAvailable(bool? value) {
+    if (_isDnsAvailable == value) return;
+    _isDnsAvailable = value;
+    notifyListeners();
+  }
+
+  bool? get isTlsAvailable => _isTlsAvailable;
+  set isTlsAvailable(bool? value) {
+    if (_isTlsAvailable == value) return;
+    _isTlsAvailable = value;
+    notifyListeners();
+  }
+
+  bool? get isHttpAvailable => _isHttpAvailable;
+  set isHttpAvailable(bool? value) {
+    if (_isHttpAvailable == value) return;
+    _isHttpAvailable = value;
+    notifyListeners();
+  }
+
+  int? get httpStatusCode => _httpStatusCode;
+  set httpStatusCode(int? value) {
+    if (_httpStatusCode == value) return;
+    _httpStatusCode = value;
+    notifyListeners();
+  }
+
+  String? get diagnosis => _diagnosis;
+  set diagnosis(String? value) {
+    if (_diagnosis == value) return;
+    _diagnosis = value;
+    notifyListeners();
+  }
+
   void updateHops(void Function(List<HopInfo>) update) {
     update(_hops);
     notifyListeners();
@@ -161,14 +211,24 @@ class HostStatus extends ChangeNotifier {
     'lastChecked': _lastChecked?.toIso8601String(),
     'hops': _hops.map((h) => h.toJson()).toList(),
     'isTcpAvailable': _isTcpAvailable,
+    'isDnsAvailable': _isDnsAvailable,
+    'isTlsAvailable': _isTlsAvailable,
+    'isHttpAvailable': _isHttpAvailable,
+    'httpStatusCode': _httpStatusCode,
+    'diagnosis': _diagnosis,
   };
 
   factory HostStatus.fromJson(Map<String, dynamic> json) {
+    final stateIndex = json['state'] ?? HostState.unknown.index;
+    final state = stateIndex >= 0 && stateIndex < HostState.values.length
+        ? HostState.values[stateIndex]
+        : HostState.unknown;
+
     return HostStatus(
       category: json['category'],
       name: json['name'],
       host: json['host'],
-      state: HostState.values[json['state'] ?? 2],
+      state: state,
       rtt: json['rtt']?.toDouble(),
       errorMessage: json['errorMessage'],
       resolvedIp: json['resolvedIp'],
@@ -178,6 +238,11 @@ class HostStatus extends ChangeNotifier {
           : null,
       hops: (json['hops'] as List?)?.map((h) => HopInfo.fromJson(h)).toList(),
       isTcpAvailable: json['isTcpAvailable'] ?? false,
+      isDnsAvailable: json['isDnsAvailable'],
+      isTlsAvailable: json['isTlsAvailable'],
+      isHttpAvailable: json['isHttpAvailable'],
+      httpStatusCode: json['httpStatusCode'],
+      diagnosis: json['diagnosis'],
     );
   }
 
