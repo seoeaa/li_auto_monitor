@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -252,5 +253,68 @@ void main() {
       }
       await raw.close();
     }
+  });
+  test(
+    'fragmented HTTP headers and informational responses are parsed',
+    () async {
+      handler = (request) async {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.add(
+          ascii.encode(
+            'HTTP/1.1 103 Early Hints\r\nLink: </a>\r\n\r\nHTTP/1.1 204',
+          ),
+        );
+        await socket.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        socket.add(ascii.encode(' No Content\r\nConnection: close\r\n\r\n'));
+        await socket.close();
+      };
+      final result = await probe().check(
+        'localhost',
+        CheckCancellation(),
+        port: server.port,
+      );
+      expect(result.httpStatusCode, 204);
+      expect(result.state, HostState.online);
+    },
+  );
+
+  test(
+    'invalid HTTP status remains a protocol failure after verified TLS',
+    () async {
+      handler = (request) async {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.add(ascii.encode('INVALID RESPONSE\r\n\r\n'));
+        await socket.close();
+      };
+      final result = await probe().check(
+        'localhost',
+        CheckCancellation(),
+        port: server.port,
+      );
+      expect(result.hasSecureEvidence, isTrue);
+      expect(result.steps[3].state, CheckState.failure);
+      expect(result.state, HostState.degraded);
+    },
+  );
+
+  test('oversized HTTP headers terminate without unbounded buffering', () async {
+    handler = (request) async {
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.add(
+        ascii.encode(
+          'HTTP/1.1 200 OK\r\nX-Large: ${List.filled(70000, 'x').join()}\r\n\r\n',
+        ),
+      );
+      await socket.close();
+    };
+    final result = await probe().check(
+      'localhost',
+      CheckCancellation(),
+      port: server.port,
+    );
+    expect(result.hasSecureEvidence, isTrue);
+    expect(result.steps[3].state, CheckState.failure);
+    expect(result.summary, contains('64'));
   });
 }

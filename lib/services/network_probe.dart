@@ -63,11 +63,14 @@ class NetworkProbe {
     final watch = Stopwatch()..start();
     final attempts = <String>[];
     final steps = List<CheckStep>.filled(
-      4, const CheckStep(CheckState.skipped, 'Предыдущий этап не завершён.'),
+      4,
+      const CheckStep(CheckState.skipped, 'Предыдущий этап не завершён.'),
     );
     Duration remaining() {
       final left = hostTimeout - watch.elapsed;
-      if (left <= Duration.zero) throw TimeoutException('Лимит времени проверки');
+      if (left <= Duration.zero) {
+        throw TimeoutException('Лимит времени проверки');
+      }
       return left < stageTimeout ? left : stageTimeout;
     }
 
@@ -76,12 +79,23 @@ class NetworkProbe {
       if (cancellation.isCancelled) throw const CheckCancelled();
       addresses = await cancellation.wait(lookup(host), timeout: remaining());
       final seen = <String>{};
-      addresses = addresses.where((address) => seen.add(address.address)).toList();
-      if (addresses.isEmpty) throw const SocketException('DNS не вернул адресов');
-      steps[0] = CheckStep(CheckState.success, 'DNS: получено адресов ${addresses.length}.',
-        milliseconds: watch.elapsedMilliseconds);
+      addresses = addresses
+          .where((address) => seen.add(address.address))
+          .toList();
+      if (addresses.isEmpty) {
+        throw const SocketException('DNS не вернул адресов');
+      }
+      steps[0] = CheckStep(
+        CheckState.success,
+        'DNS: получено адресов ${addresses.length}.',
+        milliseconds: watch.elapsedMilliseconds,
+      );
     } on CheckCancelled {
-      return DiagnosticResult(steps: steps, checkedAt: DateTime.now(), cancelled: true);
+      return DiagnosticResult(
+        steps: steps,
+        checkedAt: DateTime.now(),
+        cancelled: true,
+      );
     } catch (error) {
       steps[0] = CheckStep(CheckState.failure, _error('DNS', error));
       return DiagnosticResult(steps: steps, checkedAt: DateTime.now());
@@ -90,13 +104,25 @@ class NetworkProbe {
     DiagnosticResult? best;
     for (final address in addresses) {
       if (cancellation.isCancelled) {
-        return DiagnosticResult(steps: steps, checkedAt: DateTime.now(), cancelled: true);
+        return DiagnosticResult(
+          steps: steps,
+          checkedAt: DateTime.now(),
+          cancelled: true,
+        );
       }
       if (watch.elapsed >= hostTimeout) {
         attempts.add('Остальные адреса не проверены: исчерпан лимит времени.');
         break;
       }
-      final result = await _checkAddress(host, port, path, address, steps[0], cancellation, remaining);
+      final result = await _checkAddress(
+        host,
+        port,
+        path,
+        address,
+        steps[0],
+        cancellation,
+        remaining,
+      );
       attempts.add('${address.address}: ${result.summary}');
       if (result.cancelled) return result.withAttempts(attempts);
       // Preserve an actual server response, even an error; do not search for a
@@ -104,18 +130,33 @@ class NetworkProbe {
       if (result.httpStatusCode != null) return result.withAttempts(attempts);
       if (best == null || _progress(result) > _progress(best)) best = result;
     }
-    return (best ?? DiagnosticResult(
-      steps: [steps[0], const CheckStep(CheckState.failure, 'Исчерпан лимит времени TCP.'), steps[2], steps[3]],
-      checkedAt: DateTime.now(),
-    )).withAttempts(attempts);
+    return (best ??
+            DiagnosticResult(
+              steps: [
+                steps[0],
+                const CheckStep(
+                  CheckState.failure,
+                  'Исчерпан лимит времени TCP.',
+                ),
+                steps[2],
+                steps[3],
+              ],
+              checkedAt: DateTime.now(),
+            ))
+        .withAttempts(attempts);
   }
 
   int _progress(DiagnosticResult result) =>
       result.steps.where((step) => step.available == true).length;
 
   Future<DiagnosticResult> _checkAddress(
-    String host, int port, String path, InternetAddress address,
-    CheckStep dns, CheckCancellation cancellation, Duration Function() remaining,
+    String host,
+    int port,
+    String path,
+    InternetAddress address,
+    CheckStep dns,
+    CheckCancellation cancellation,
+    Duration Function() remaining,
   ) async {
     final steps = <CheckStep>[
       dns,
@@ -142,49 +183,65 @@ class NetworkProbe {
       // cancel a SecureSocket.secure handshake in progress.
       if (socket != null) _closeSocket(socket!);
     }
+
     final removeCancel = cancellation.onCancel(close);
 
     try {
       if (closed) throw const CheckCancelled();
-      final connecting = RawSocket.startConnect(address, port).then((value) {
-        task = value;
-        if (closed) value.cancel();
-        return value.socket;
-      }).then((value) {
-        if (closed) {
-          _closeSocket(value);
-          throw const CheckCancelled();
-        }
-        socket = value;
-        return value;
-      });
+      final connecting = RawSocket.startConnect(address, port)
+          .then((value) {
+            task = value;
+            if (closed) value.cancel();
+            return value.socket;
+          })
+          .then((value) {
+            if (closed) {
+              _closeSocket(value);
+              throw const CheckCancelled();
+            }
+            socket = value;
+            return value;
+          });
       final value = await cancellation.wait(connecting, timeout: remaining());
       resolvedIp = value.remoteAddress.address;
-      steps[1] = CheckStep(CheckState.success, 'TCP: соединение с $resolvedIp:$port.',
-        milliseconds: stageWatch.elapsedMilliseconds);
+      steps[1] = CheckStep(
+        CheckState.success,
+        'TCP: соединение с $resolvedIp:$port.',
+        milliseconds: stageWatch.elapsedMilliseconds,
+      );
       activeStage = 2;
       stageWatch.reset();
-      final securing = RawSecureSocket.secure(
-        value,
-        host: host,
-        context: securityContext,
-        supportedProtocols: const ['http/1.1'],
-      ).then((value) {
-        if (closed) {
-          _closeSocket(value);
-          throw const CheckCancelled();
-        }
-        secureSocket = value;
-        return value;
-      });
+      final securing =
+          RawSecureSocket.secure(
+            value,
+            host: host,
+            context: securityContext,
+            supportedProtocols: const ['http/1.1'],
+          ).then((value) {
+            if (closed) {
+              _closeSocket(value);
+              throw const CheckCancelled();
+            }
+            secureSocket = value;
+            return value;
+          });
       final secured = await cancellation.wait(securing, timeout: remaining());
-      steps[2] = CheckStep(CheckState.success, 'TLS: сертификат и имя $host проверены.',
-        milliseconds: stageWatch.elapsedMilliseconds);
+      steps[2] = CheckStep(
+        CheckState.success,
+        'TLS: сертификат и имя $host проверены.',
+        milliseconds: stageWatch.elapsedMilliseconds,
+      );
       activeStage = 3;
       stageWatch.reset();
       final uri = Uri(scheme: 'https', host: host, port: port, path: path);
-      statusCode = await cancellation.wait(_readHead(secured, uri), timeout: remaining());
-      steps[3] = classifyHttpStatus(statusCode, milliseconds: stageWatch.elapsedMilliseconds);
+      statusCode = await cancellation.wait(
+        _readHead(secured, uri),
+        timeout: remaining(),
+      );
+      steps[3] = classifyHttpStatus(
+        statusCode,
+        milliseconds: stageWatch.elapsedMilliseconds,
+      );
     } on CheckCancelled {
       cancelled = true;
     } catch (error) {
@@ -192,8 +249,11 @@ class NetworkProbe {
         cancelled = true;
       } else {
         const names = ['DNS', 'TCP', 'TLS', 'HTTPS'];
-        steps[activeStage] = CheckStep(CheckState.failure, _error(names[activeStage], error),
-          milliseconds: stageWatch.elapsedMilliseconds);
+        steps[activeStage] = CheckStep(
+          CheckState.failure,
+          _error(names[activeStage], error),
+          milliseconds: stageWatch.elapsedMilliseconds,
+        );
       }
     } finally {
       removeCancel();
@@ -212,7 +272,9 @@ class NetworkProbe {
   // Minimal bounded HEAD exchange. TLS is negotiated above; no redirects,
   // response body or HTTP/2 are involved. Informational responses are skipped.
   Future<int> _readHead(RawSecureSocket socket, Uri uri) async {
-    final requestTarget = Uri(path: uri.path.isEmpty ? '/' : uri.path).toString();
+    final requestTarget = Uri(
+      path: uri.path.isEmpty ? '/' : uri.path,
+    ).toString();
     final request = ascii.encode(
       'HEAD $requestTarget HTTP/1.1\r\n'
       'Host: ${uri.authority}\r\n'
@@ -228,6 +290,7 @@ class NetworkProbe {
     void fail(Object error, [StackTrace? stackTrace]) {
       if (!response.isCompleted) response.completeError(error, stackTrace);
     }
+
     void write() {
       if (response.isCompleted) return;
       while (offset < request.length) {
@@ -237,62 +300,88 @@ class NetworkProbe {
       }
       socket.writeEventsEnabled = offset < request.length;
     }
+
     void read() {
       while (!response.isCompleted) {
         final chunk = socket.read(8192);
         if (chunk == null) break;
         receivedBytes += chunk.length;
-        if (receivedBytes > 65536) throw const HttpException('Заголовки больше 64 КиБ');
+        if (receivedBytes > 65536) {
+          throw const HttpException('Заголовки больше 64 КиБ');
+        }
         buffer += latin1.decode(chunk);
         while (!response.isCompleted) {
           final end = buffer.indexOf('\r\n\r\n');
           if (end < 0) break;
           final headers = buffer.substring(0, end).split('\r\n');
           buffer = buffer.substring(end + 4);
-          final match = RegExp(r'^HTTP/1\.[01] ([1-5][0-9]{2})(?: .*)?$').firstMatch(headers.first);
-          if (match == null) throw const HttpException('Некорректная строка статуса HTTP');
+          final match = RegExp(
+            r'^HTTP/1\.[01] ([1-5][0-9]{2})(?: .*)?$',
+          ).firstMatch(headers.first);
+          if (match == null) {
+            throw const HttpException('Некорректная строка статуса HTTP');
+          }
           for (final header in headers.skip(1)) {
-            if (header.isNotEmpty && !header.contains(':') && !header.startsWith(' ') && !header.startsWith('\t')) {
+            if (header.isNotEmpty &&
+                !header.contains(':') &&
+                !header.startsWith(' ') &&
+                !header.startsWith('\t')) {
               throw const HttpException('Некорректный заголовок HTTP');
             }
           }
           final code = int.parse(match.group(1)!);
           if (code < 200 && code != 101) {
-            if (++informational > 10) throw const HttpException('Слишком много промежуточных ответов');
+            if (++informational > 10) {
+              throw const HttpException('Слишком много промежуточных ответов');
+            }
             continue;
           }
           response.complete(code);
         }
       }
     }
-    final subscription = socket.listen((event) {
-      try {
-        if (event == RawSocketEvent.write) write();
-        if (event == RawSocketEvent.read) read();
-        if (event == RawSocketEvent.readClosed || event == RawSocketEvent.closed) {
-          fail(const HttpException('Соединение закрыто до получения заголовков'));
+
+    final subscription = socket.listen(
+      (event) {
+        try {
+          if (event == RawSocketEvent.write) write();
+          if (event == RawSocketEvent.read) read();
+          if (event == RawSocketEvent.readClosed ||
+              event == RawSocketEvent.closed) {
+            fail(
+              const HttpException('Соединение закрыто до получения заголовков'),
+            );
+          }
+        } catch (error, stackTrace) {
+          fail(error, stackTrace);
         }
-      } catch (error, stackTrace) {
-        fail(error, stackTrace);
-      }
-    }, onError: fail, onDone: () => fail(const HttpException('Нет полного ответа HTTP')));
+      },
+      onError: fail,
+      onDone: () => fail(const HttpException('Нет полного ответа HTTP')),
+    );
     try {
       socket.readEventsEnabled = true;
       socket.writeEventsEnabled = true;
       write();
       return await response.future;
     } finally {
-      await subscription.cancel();
+      unawaited(subscription.cancel().catchError((Object _) {}));
     }
   }
 
   static void _closeSocket(RawSocket socket) {
-    unawaited(socket.close().then<void>((_) {}, onError: (Object _) {}));
+    try {
+      unawaited(socket.close().then<void>((_) {}, onError: (Object _) {}));
+    } catch (_) {
+      // The other layer may already have closed the shared transport.
+    }
   }
 
   static String _error(String stage, Object error) {
     if (error is TimeoutException) return '$stage: время ожидания истекло.';
-    if (error is HandshakeException) return '$stage: TLS-рукопожатие не завершено (${error.message}).';
+    if (error is HandshakeException) {
+      return '$stage: TLS-рукопожатие не завершено (${error.message}).';
+    }
     if (error is SocketException) return '$stage: ${error.message}.';
     if (error is HttpException) return '$stage: ${error.message}.';
     return '$stage: проверка не завершена (${error.runtimeType}).';

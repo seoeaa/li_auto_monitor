@@ -40,8 +40,8 @@ class HistoryEntry {
 
   Map<String, dynamic> toJson() => {
     'host': host,
-    'timestamp': timestamp.toIso8601String(),
-    'observedUntil': observedUntil.toIso8601String(),
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'observedUntil': observedUntil.toUtc().toIso8601String(),
     'state': state.name,
     'isOnline': isOnline,
     'sessionId': sessionId,

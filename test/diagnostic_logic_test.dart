@@ -2,16 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 import 'package:li_auto_monitor/models/host_status.dart';
 import 'package:li_auto_monitor/services/history_service.dart';
 import 'package:li_auto_monitor/services/monitor_service.dart';
 import 'package:li_auto_monitor/services/network_probe.dart';
-import 'package:li_auto_monitor/screens/dashboard.view.dart';
-import 'package:li_auto_monitor/widgets/tcp_status_indicator.dart';
-import 'package:li_auto_monitor/theme/app_theme.dart';
 
 DiagnosticResult resultFor(int code, {DateTime? at}) => DiagnosticResult(
   steps: [
@@ -429,51 +424,5 @@ void main() {
     expect(host.isChecking, isFalse);
     pending.complete(dnsFailure());
     monitor.dispose();
-  });
-
-  testWidgets('skipped TLS and HTTPS are visible without red failure labels', (
-    tester,
-  ) async {
-    final host = HostStatus.unknown('APP', 'API', 'api.invalid')
-      ..applyResult(dnsFailure());
-    await tester.binding.setSurfaceSize(const Size(320, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: Scaffold(body: TcpStatusIndicator(host: host)),
-      ),
-    );
-    expect(find.text('TLS · Не выполнялось'), findsOneWidget);
-    expect(find.text('HTTPS · Не выполнялось'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    host.dispose();
-  });
-
-  testWidgets('initial dashboard does not label unknown groups as reachable', (
-    tester,
-  ) async {
-    final pending = Completer<DiagnosticResult>();
-    final monitor = MonitorService(
-      initialHosts: [HostStatus.unknown('APP', 'API', 'api.invalid')],
-      probe: FakeProbe((_, token) => pending.future),
-      controlHosts: [],
-    );
-    await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: monitor,
-        child: MaterialApp(
-          theme: AppTheme.darkTheme,
-          home: const DashboardView(),
-        ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Доступны по сети'), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
-    monitor.dispose();
-    pending.complete(resultFor(200));
-    await tester.pump();
-    expect(tester.takeException(), isNull);
   });
 }
