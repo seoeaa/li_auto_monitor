@@ -185,13 +185,13 @@ class NetworkProbe {
 
     final removeCancel = cancellation.onCancel(close);
 
-    // HttpClient performs TLS on this exact socket. The original URI supplies
-    // SNI, certificate hostname validation and Host. No second DNS lookup occurs.
+    // A custom connectionFactory must provide its own TLS socket.
+    // Pin the TCP address, then verify TLS using the original hostname/SNI.
     client.connectionFactory = (uri, proxyHost, proxyPort) async {
       if (closed) throw const CheckCancelled();
       final connectionTask = await Socket.startConnect(address, port);
       task = connectionTask;
-      final connected = connectionTask.socket.then((value) {
+      final connected = connectionTask.socket.then<Socket>((value) async {
         if (closed) {
           value.destroy();
           throw const CheckCancelled();
@@ -205,7 +205,18 @@ class NetworkProbe {
         );
         activeStage = 2;
         stageWatch.reset();
-        return value;
+        final secureSocket = await SecureSocket.secure(
+          value,
+          host: host,
+          context: securityContext,
+          supportedProtocols: const ['http/1.1'],
+        );
+        if (closed) {
+          secureSocket.destroy();
+          throw const CheckCancelled();
+        }
+        socket = secureSocket;
+        return secureSocket;
       });
       if (closed) connectionTask.cancel();
       return ConnectionTask.fromSocket(connected, () {
