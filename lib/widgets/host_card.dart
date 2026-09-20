@@ -110,21 +110,25 @@ class _HostCardState extends State<HostCard>
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _toggleExpand,
-                child: Column(
-                  children: [
-                    _buildMainContent(statusColor, timeStr),
-                    _buildHealthStrip(),
-                    SizeTransition(
-                      sizeFactor: _expandAnimation,
-                      child: TracerouteDetails(host: widget.host),
+            child: Column(
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _toggleExpand,
+                    child: Column(
+                      children: [
+                        _buildMainContent(statusColor, timeStr),
+                        _buildHealthStrip(),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                SizeTransition(
+                  sizeFactor: _expandAnimation,
+                  child: TracerouteDetails(host: widget.host),
+                ),
+              ],
             ),
           ),
         );
