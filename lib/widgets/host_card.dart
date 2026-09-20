@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/host_status.dart';
-import '../services/monitor_service.dart';
 import '../theme/app_theme.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'traceroute_details.dart';
 
 class HostCard extends StatefulWidget {
@@ -33,11 +31,11 @@ class _HostCardState extends State<HostCard>
     super.initState();
     _expandController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 240),
     );
     _expandAnimation = CurvedAnimation(
       parent: _expandController,
-      curve: Curves.easeInOutCubic,
+      curve: Curves.easeOutCubic,
     );
 
     _lastState = widget.host.state;
@@ -51,7 +49,7 @@ class _HostCardState extends State<HostCard>
         _lastState = widget.host.state;
       });
       _pulseTimer?.cancel();
-      _pulseTimer = Timer(const Duration(milliseconds: 1500), () {
+      _pulseTimer = Timer(const Duration(milliseconds: 900), () {
         if (mounted) {
           setState(() {
             _statusChanged = false;
@@ -83,12 +81,6 @@ class _HostCardState extends State<HostCard>
     setState(() => _isExpanded = !_isExpanded);
     if (_isExpanded) {
       _expandController.forward();
-      if (!widget.host.isTracing) {
-        Provider.of<MonitorService>(
-          context,
-          listen: false,
-        ).traceHost(widget.host);
-      }
     } else {
       _expandController.reverse();
     }
@@ -104,62 +96,34 @@ class _HostCardState extends State<HostCard>
             ? _timeFormat.format(widget.host.lastChecked!)
             : '--:--:--';
 
-        return GestureDetector(
-          onTap: _toggleExpand,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOutCubic,
-            decoration: BoxDecoration(
-              gradient: AppTheme.cardGradient,
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              border: Border.all(color: statusColor.withOpacity(0.2), width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: statusColor.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundCard,
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            border: Border.all(
+              color: _statusChanged
+                  ? statusColor.withOpacity(0.55)
+                  : AppTheme.borderSubtle,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
-              child: Row(
-                children: [
-                  // Vertical status bar
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeInOut,
-                    width: 4,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: statusColor,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        bottomLeft: Radius.circular(24),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: statusColor.withOpacity(
-                            _statusChanged ? 0.8 : 0.5,
-                          ),
-                          blurRadius: _statusChanged ? 24 : 8,
-                          spreadRadius: _statusChanged ? 4 : 1,
-                        ),
-                      ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleExpand,
+                child: Column(
+                  children: [
+                    _buildMainContent(statusColor, timeStr),
+                    _buildHealthStrip(),
+                    SizeTransition(
+                      sizeFactor: _expandAnimation,
+                      child: TracerouteDetails(host: widget.host),
                     ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _buildMainContent(statusColor, timeStr),
-                        SizeTransition(
-                          sizeFactor: _expandAnimation,
-                          child: TracerouteDetails(host: widget.host),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -170,124 +134,97 @@ class _HostCardState extends State<HostCard>
 
   Widget _buildMainContent(Color statusColor, String timeStr) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Host info
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+            ),
+            child: Icon(
+              _getStatusIcon(widget.host.state),
+              color: statusColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.host.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                    letterSpacing: -0.3,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.host.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildStatusBadge(statusColor),
+                  ],
                 ),
                 const SizedBox(height: 4),
-                _buildCategoryBadge(),
-                const SizedBox(height: 6),
                 Text(
                   widget.host.host,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
+                    color: AppTheme.textTertiary,
+                    fontSize: 11,
                   ),
                 ),
-                if (widget.host.resolvedIp != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 12,
-                        color: AppTheme.primaryCyan.withOpacity(0.7),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.host.resolvedIp}',
-                        style: const TextStyle(
-                          color: AppTheme.primaryCyan,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (widget.host.resolvedCountry != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryCyan.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            widget.host.resolvedCountry!,
-                            style: const TextStyle(
-                              color: AppTheme.primaryCyan,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-                if (widget.host.errorMessage != null) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      widget.host.errorMessage!,
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 11,
-                      ),
+                if (widget.host.errorMessage != null &&
+                    widget.host.state != HostState.checking) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    widget.host.errorMessage!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-
-          // RTT & Time
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                widget.host.rtt != null
-                    ? widget.host.rtt!.toStringAsFixed(1)
-                    : '--',
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  letterSpacing: -0.5,
+              if (widget.host.rtt != null)
+                Text(
+                  '${widget.host.rtt!.toStringAsFixed(0)} ms',
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              else
+                const Text(
+                  '—',
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              Text(
-                'ms',
-                style: TextStyle(
-                  color: statusColor.withOpacity(0.6),
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 timeStr,
                 style: const TextStyle(
@@ -297,16 +234,14 @@ class _HostCardState extends State<HostCard>
               ),
             ],
           ),
-
-          const SizedBox(width: 8),
-          // Expand indicator
+          const SizedBox(width: 6),
           AnimatedRotation(
             turns: _isExpanded ? 0.5 : 0,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 220),
             child: const Icon(
-              Icons.keyboard_arrow_down,
-              color: AppTheme.textSecondary,
-              size: 24,
+              Icons.keyboard_arrow_down_rounded,
+              color: AppTheme.textTertiary,
+              size: 22,
             ),
           ),
         ],
@@ -314,23 +249,110 @@ class _HostCardState extends State<HostCard>
     );
   }
 
-  Widget _buildCategoryBadge() {
+  Widget _buildHealthStrip() {
+    final tcpValue = widget.host.isDnsAvailable == true
+        ? widget.host.isTcpAvailable
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          _buildHealthStep('DNS', widget.host.isDnsAvailable),
+          _buildHealthStep('TCP', tcpValue),
+          _buildHealthStep('TLS', widget.host.isTlsAvailable),
+          _buildHealthStep('HTTPS', widget.host.isHttpAvailable),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHealthStep(String label, bool? value) {
+    final color = value == null
+        ? AppTheme.textTertiary
+        : value
+        ? AppTheme.statusOnline
+        : AppTheme.statusDown;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        color: color.withOpacity(value == null ? 0.06 : 0.09),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: value == null ? AppTheme.textTertiary : color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(Color statusColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        widget.host.category,
-        style: const TextStyle(
-          color: AppTheme.textSecondary,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
+        _getStatusLabel(widget.host.state),
+        style: TextStyle(
+          color: statusColor,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
+  }
+
+  String _getStatusLabel(HostState state) {
+    switch (state) {
+      case HostState.online:
+        return 'РАБОТАЕТ';
+      case HostState.down:
+        return 'ОШИБКА';
+      case HostState.degraded:
+        return 'НЕСТАБИЛЬНО';
+      case HostState.checking:
+        return 'ПРОВЕРКА';
+      case HostState.unknown:
+        return 'ОЖИДАНИЕ';
+    }
+  }
+
+  IconData _getStatusIcon(HostState state) {
+    switch (state) {
+      case HostState.online:
+        return Icons.check_rounded;
+      case HostState.down:
+        return Icons.close_rounded;
+      case HostState.degraded:
+        return Icons.warning_amber_rounded;
+      case HostState.checking:
+        return Icons.sync_rounded;
+      case HostState.unknown:
+        return Icons.more_horiz_rounded;
+    }
   }
 
   Color _getStatusColor(HostState state) {
@@ -344,7 +366,7 @@ class _HostCardState extends State<HostCard>
       case HostState.checking:
         return AppTheme.accentBlue;
       case HostState.unknown:
-        return AppTheme.statusUnknown;
+        return AppTheme.textTertiary;
     }
   }
 }
