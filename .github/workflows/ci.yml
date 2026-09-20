@@ -1,12 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - v1.1-smart-diagnostics
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   flutter-check:
