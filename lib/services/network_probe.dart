@@ -239,7 +239,7 @@ class NetworkProbe {
         timeout: remaining(),
       );
       steps[3] = classifyHttpStatus(
-        statusCode,
+        statusCode!,
         milliseconds: stageWatch.elapsedMilliseconds,
       );
     } on CheckCancelled {
