@@ -13,36 +13,37 @@ class TcpStatusIndicator extends StatelessWidget {
         ? host.isTcpAvailable
         : null;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+    final steps = [
+      ('DNS', host.isDnsAvailable, host.resolvedIp),
+      ('TCP 443', tcpValue, host.isTcpAvailable ? 'Соединение установлено' : null),
+      ('TLS', host.isTlsAvailable, host.isTlsAvailable == true ? 'Защищённое соединение' : null),
+      (
+        'HTTPS',
+        host.isHttpAvailable,
+        host.httpStatusCode != null ? 'HTTP ${host.httpStatusCode}' : null,
       ),
-      child: Column(
-        children: [
-          _buildStep('DNS', host.isDnsAvailable, host.resolvedIp),
-          const SizedBox(height: 10),
-          _buildStep(
-            'TCP 443',
-            tcpValue,
-            host.isTcpAvailable ? 'соединение установлено' : null,
-          ),
-          const SizedBox(height: 10),
-          _buildStep(
-            'TLS',
-            host.isTlsAvailable,
-            host.isTlsAvailable == true ? 'рукопожатие успешно' : null,
-          ),
-          const SizedBox(height: 10),
-          _buildStep(
-            'HTTPS',
-            host.isHttpAvailable,
-            host.httpStatusCode != null ? 'HTTP ${host.httpStatusCode}' : null,
-          ),
-        ],
-      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 620 ? 4 : 2;
+        const gap = 8.0;
+        final itemWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: steps
+              .map(
+                (step) => SizedBox(
+                  width: itemWidth,
+                  child: _buildStep(step.$1, step.$2, step.$3),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 
@@ -53,54 +54,63 @@ class TcpStatusIndicator extends StatelessWidget {
         ? AppTheme.statusOnline
         : AppTheme.statusDown;
     final icon = value == null
-        ? Icons.more_horiz
+        ? Icons.more_horiz_rounded
         : value
-        ? Icons.check_circle_outline
-        : Icons.cancel_outlined;
+        ? Icons.check_rounded
+        : Icons.close_rounded;
     final state = value == null
-        ? 'ожидание'
+        ? 'Ожидание'
         : value
-        ? 'OK'
-        : 'ошибка';
+        ? 'Работает'
+        : 'Ошибка';
 
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 68,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundCardElevated,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(9),
             ),
+            child: Icon(icon, color: color, size: 16),
           ),
-        ),
-        Text(
-          state,
-          style: TextStyle(
-            color: color,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        if (detail != null && detail.isNotEmpty) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 9),
           Expanded(
-            child: Text(
-              detail,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppTheme.textTertiary,
-                fontSize: 11,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail ?? state,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: detail != null ? AppTheme.textTertiary : color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 }
