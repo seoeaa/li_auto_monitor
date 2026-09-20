@@ -336,8 +336,10 @@ class UptimePainter extends CustomPainter {
       final endRatio =
           segmentEnd.difference(startTime).inMilliseconds / totalMs;
 
-      final left = (startRatio.clamp(0.0, 1.0) * size.width) + gap / 2;
-      final right = (endRatio.clamp(0.0, 1.0) * size.width) - gap / 2;
+      final left =
+          (startRatio.clamp(0.0, 1.0).toDouble() * size.width) + gap / 2;
+      final right =
+          (endRatio.clamp(0.0, 1.0).toDouble() * size.width) - gap / 2;
       if (right <= left) continue;
 
       paint.color = entry.isOnline
