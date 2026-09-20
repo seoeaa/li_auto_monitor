@@ -1,0 +1,59 @@
+name: Diagnostic verification
+on:
+  push:
+    branches: [fix/diagnostic-correctness]
+concurrency:
+  group: diagnostic-verification-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect repository instructions
+        run: |
+          find . -name AGENTS.md -not -path './.git/*' -print -exec cat {} \;
+          test -z "$(find . -name AGENTS.md -not -path './.git/*' -print)"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Apply reviewed compatibility changes
+        run: |
+          python tools/apply_diagnostic_ui_fix.py
+          dart format lib
+          git add lib
+          if ! git diff --cached --quiet; then
+            git -c user.name='Diagnostic verification' -c user.email='diagnostic-ci@users.noreply.github.com' commit -m 'fix: apply compatible diagnostic model and UI changes'
+            git push origin HEAD:fix/diagnostic-correctness
+          fi
+      - name: Dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Regression tests
+        run: flutter test --reporter expanded
+      - name: Android build
+        run: flutter build apk --debug
+      - name: Collect sources
+        if: always()
+        run: |
+          mkdir -p validation
+          git rev-parse HEAD > validation/commit.txt
+          git diff > validation/uncommitted.patch
+          tar -czf validation/diagnostic-sources.tar.gz lib test pubspec.yaml pubspec.lock README.md 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostic-validation
+          path: |
+            validation/
+            build/app/outputs/flutter-apk/app-debug.apk
