@@ -89,7 +89,7 @@ class _DashboardViewState extends State<DashboardView>
       automaticallyImplyLeading: false,
       toolbarHeight: 72,
       titleSpacing: 20,
-      backgroundColor: AppTheme.backgroundDark.withOpacity(0.96),
+      backgroundColor: AppTheme.backgroundDark.withValues(alpha: 0.96),
       surfaceTintColor: Colors.transparent,
       title: Row(
         children: [
@@ -97,10 +97,10 @@ class _DashboardViewState extends State<DashboardView>
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: AppTheme.primaryCyan.withOpacity(0.12),
+              color: AppTheme.primaryCyan.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
               border: Border.all(
-                color: AppTheme.primaryCyan.withOpacity(0.16),
+                color: AppTheme.primaryCyan.withValues(alpha: 0.16),
               ),
             ),
             child: const Icon(
@@ -319,7 +319,7 @@ class _DashboardViewState extends State<DashboardView>
                   border: Border.all(
                     color: state == HostState.online
                         ? AppTheme.borderSubtle
-                        : color.withOpacity(0.28),
+                        : color.withValues(alpha: 0.28),
                   ),
                   boxShadow: AppTheme.cardShadow,
                 ),
@@ -333,7 +333,7 @@ class _DashboardViewState extends State<DashboardView>
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.11),
+                            color: color.withValues(alpha: 0.11),
                             borderRadius: BorderRadius.circular(
                               AppTheme.radiusMedium,
                             ),
@@ -723,7 +723,7 @@ class _DashboardViewState extends State<DashboardView>
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: summaryColor.withOpacity(0.08),
+                  color: summaryColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
