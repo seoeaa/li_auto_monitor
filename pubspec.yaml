@@ -1,7 +1,7 @@
 name: li_auto_monitor
-description: "A new Flutter project."
+description: "Диагностика доступности сервисов Li Auto: DNS, TCP, TLS, HTTPS и анализ маршрута."
 publish_to: 'none'
-version: 0.1.0
+version: 1.1.0
 
 environment:
   sdk: ^3.10.4
