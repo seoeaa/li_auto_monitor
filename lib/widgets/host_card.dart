@@ -339,6 +339,10 @@ class _HostCardState extends State<HostCard>
         return AppTheme.statusOnline;
       case HostState.down:
         return AppTheme.statusDown;
+      case HostState.degraded:
+        return AppTheme.statusUnknown;
+      case HostState.checking:
+        return AppTheme.accentBlue;
       case HostState.unknown:
         return AppTheme.statusUnknown;
     }
