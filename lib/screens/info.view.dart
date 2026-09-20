@@ -5,11 +5,16 @@ import '../theme/app_theme.dart';
 class InfoView extends StatelessWidget {
   const InfoView({super.key});
 
-  Future<void> _launchTelegram() async {
+  Future<void> _launchTelegram(BuildContext context) async {
     final Uri url = Uri.parse('https://t.me/slaveaa');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $url');
-    }
+    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (opened || !context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Не удалось открыть Telegram'),
+      ),
+    );
   }
 
   @override
@@ -253,7 +258,7 @@ class InfoView extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        onTap: _launchTelegram,
+        onTap: () => _launchTelegram(context),
         child: const Padding(
           padding: EdgeInsets.all(16),
           child: Row(
