@@ -31,6 +31,10 @@
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Avoid an Adreno Vulkan shader compiler failure that renders a black screen. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.ImpellerBackend"
+            android:value="opengles" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
