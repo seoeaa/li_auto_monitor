@@ -101,11 +101,12 @@ void main() {
       () async {
         handler = (request) async {
           request.response.statusCode = code;
-          if (code == 301)
+          if (code == 301) {
             request.response.headers.set(
               HttpHeaders.locationHeader,
               'https://never-request.invalid/',
             );
+          }
           await request.response.close();
         };
         final result = await probe().check(

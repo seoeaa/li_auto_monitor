@@ -14,8 +14,9 @@ class GeoIPService {
     if (address == null ||
         address.isLoopback ||
         address.isLinkLocal ||
-        address.isMulticast)
+        address.isMulticast) {
       return false;
+    }
     final bytes = address.rawAddress;
     if (address.type == InternetAddressType.IPv4) {
       return !(bytes[0] == 0 ||
@@ -73,8 +74,9 @@ class GeoIPService {
               );
               if (token.isCancelled || response.statusCode != 200) return;
               final data = jsonDecode(response.body);
-              if (data is! Map<String, dynamic> || data['error'] == true)
+              if (data is! Map<String, dynamic> || data['error'] == true) {
                 return;
+              }
               final geoData = <String, String>{
                 'country':
                     data['country_name'] as String? ??

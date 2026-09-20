@@ -241,8 +241,15 @@ class MonitorService extends ChangeNotifier {
         : results.any((result) => result.steps[0].available == true);
     _lastCycleCompleted = DateTime.now();
     try {
-      await HistoryService.saveObservations(observations);
+      await cancellation.wait(
+        HistoryService.saveObservations(observations),
+        timeout: const Duration(seconds: 5),
+      );
       historyError = null;
+    } on CheckCancelled {
+      return;
+    } on TimeoutException {
+      historyError = 'Запись истории ещё не завершена.';
     } catch (error) {
       historyError = 'История не сохранена: $error';
       AppLogger.error('History save failed', error: error);

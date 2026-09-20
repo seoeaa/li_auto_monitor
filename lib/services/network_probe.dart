@@ -171,8 +171,9 @@ class NetworkProbe {
     Socket? socket;
     ConnectionTask<Socket>? task;
     final stageWatch = Stopwatch()..start();
-    final client = HttpClient(context: securityContext)
-      ..findProxy = (_) => 'DIRECT'..autoUncompress = false;
+    final client = HttpClient(context: securityContext);
+    client.findProxy = (_) => 'DIRECT';
+    client.autoUncompress = false;
 
     void close() {
       if (closed) return;
