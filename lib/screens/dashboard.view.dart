@@ -599,33 +599,54 @@ class _DashboardViewState extends State<DashboardView>
           );
         }
 
-        return SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              return TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: Duration(milliseconds: 300 + (index * 50)),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Transform.translate(
-                      offset: Offset(0, 20 * (1 - value)),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: HostCard(
-                    key: ValueKey(hosts[index].host),
-                    host: hosts[index],
-                  ),
+        final useGrid = MediaQuery.sizeOf(context).width >= 900;
+
+        Widget buildCard(BuildContext context, int index) {
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 300 + (index * 50)),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: child,
                 ),
               );
-            }, childCount: hosts.length),
-          ),
+            },
+            child: HostCard(
+              key: ValueKey(hosts[index].host),
+              host: hosts[index],
+            ),
+          );
+        }
+
+        return SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          sliver: useGrid
+              ? SliverGrid(
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.7,
+                      ),
+                  delegate: SliverChildBuilderDelegate(
+                    buildCard,
+                    childCount: hosts.length,
+                  ),
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: buildCard(context, index),
+                    ),
+                    childCount: hosts.length,
+                  ),
+                ),
         );
       },
     );
