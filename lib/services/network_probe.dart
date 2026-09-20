@@ -67,8 +67,9 @@ class NetworkProbe {
     );
     Duration remaining() {
       final left = hostTimeout - watch.elapsed;
-      if (left <= Duration.zero)
+      if (left <= Duration.zero) {
         throw TimeoutException('Лимит времени проверки');
+      }
       return left < stageTimeout ? left : stageTimeout;
     }
 
@@ -81,8 +82,9 @@ class NetworkProbe {
       addresses = addresses
           .where((address) => seen.add(address.address))
           .toList();
-      if (addresses.isEmpty)
+      if (addresses.isEmpty) {
         throw const SocketException('DNS не вернул адресов');
+      }
       steps[0] = CheckStep(
         CheckState.success,
         'DNS: получено адресов ${addresses.length}.',

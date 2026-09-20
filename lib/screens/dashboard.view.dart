@@ -38,8 +38,9 @@ class _DashboardViewState extends State<DashboardView>
     _animationController.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted)
+      if (mounted) {
         Provider.of<MonitorService>(context, listen: false).startMonitoring();
+      }
     });
   }
 

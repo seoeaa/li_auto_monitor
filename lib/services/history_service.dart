@@ -124,8 +124,9 @@ class HistoryService {
       try {
         final decoded =
             jsonDecode(await source.readAsString()) as Map<String, dynamic>;
-        if (decoded['version'] != 2)
+        if (decoded['version'] != 2) {
           throw const FormatException('Unsupported history version');
+        }
         loaded = (decoded['entries'] as List)
             .map(
               (entry) => HistoryEntry.fromJson(
@@ -179,50 +180,52 @@ class HistoryService {
           ),
       ]);
 
-  static Future<void> saveObservations(
-    List<HistoryEntry> entries,
-  ) => _queue(() async {
-    await init();
-    var forceWrite = false;
-    for (final entry in entries) {
-      if (entry.state == HostState.checking || entry.state == HostState.unknown)
-        continue;
-      final lastIndex = _history.lastIndexWhere(
-        (value) => value.host == entry.host,
-      );
-      final last = lastIndex < 0 ? null : _history[lastIndex];
-      final gap = last == null
-          ? null
-          : entry.timestamp.difference(last.observedUntil);
-      final continuous =
-          last != null &&
-          entry.sessionId != null &&
-          last.sessionId == entry.sessionId &&
-          gap! >= Duration.zero &&
-          gap <= maxObservationGap;
-      if (continuous) {
-        // The preceding sampled state is carried only to the next confirmed
-        // measurement, never to DateTime.now() or through a stopped session.
-        _history[lastIndex] = last.until(entry.timestamp);
-        if (last.state != entry.state) {
+  static Future<void> saveObservations(List<HistoryEntry> entries) => _queue(
+    () async {
+      await init();
+      var forceWrite = false;
+      for (final entry in entries) {
+        if (entry.state == HostState.checking ||
+            entry.state == HostState.unknown) {
+          continue;
+        }
+        final lastIndex = _history.lastIndexWhere(
+          (value) => value.host == entry.host,
+        );
+        final last = lastIndex < 0 ? null : _history[lastIndex];
+        final gap = last == null
+            ? null
+            : entry.timestamp.difference(last.observedUntil);
+        final continuous =
+            last != null &&
+            entry.sessionId != null &&
+            last.sessionId == entry.sessionId &&
+            gap! >= Duration.zero &&
+            gap <= maxObservationGap;
+        if (continuous) {
+          // The preceding sampled state is carried only to the next confirmed
+          // measurement, never to DateTime.now() or through a stopped session.
+          _history[lastIndex] = last.until(entry.timestamp);
+          if (last.state != entry.state) {
+            _history.add(entry.until(entry.timestamp));
+            forceWrite = true;
+          }
+        } else {
           _history.add(entry.until(entry.timestamp));
           forceWrite = true;
         }
-      } else {
-        _history.add(entry.until(entry.timestamp));
-        forceWrite = true;
+        _dirty = true;
       }
-      _dirty = true;
-    }
-    _cleanupOldData();
-    if (_dirty &&
-        (forceWrite ||
-            _lastWrite == null ||
-            _now().difference(_lastWrite!) >= _minimumSampleInterval)) {
-      await _saveToFile();
-    }
-    changes.value++;
-  });
+      _cleanupOldData();
+      if (_dirty &&
+          (forceWrite ||
+              _lastWrite == null ||
+              _now().difference(_lastWrite!) >= _minimumSampleInterval)) {
+        await _saveToFile();
+      }
+      changes.value++;
+    },
+  );
 
   static List<HistoryEntry> getHistory(String host) =>
       _history.where((entry) => entry.host == host).toList()
@@ -242,8 +245,10 @@ class HistoryService {
           ? entry.observedUntil
           : endTime;
       if (!end.isAfter(start)) continue;
-      if (entry.state == HostState.unknown || entry.state == HostState.checking)
+      if (entry.state == HostState.unknown ||
+          entry.state == HostState.checking) {
         continue;
+      }
       segments.add(
         HistoryEntry(
           host: entry.host,

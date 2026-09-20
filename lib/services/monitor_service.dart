@@ -7,6 +7,7 @@ import '../config/hosts_config.dart';
 import '../utils/logger.dart';
 import 'history_service.dart';
 import 'network_probe.dart';
+import 'geoip_service.dart';
 
 class MonitorService extends ChangeNotifier {
   late final List<HostStatus> _hosts;
@@ -78,15 +79,16 @@ class MonitorService extends ChangeNotifier {
     if (_isCheckInProgress) {
       return 'Проверяем адреса с этого устройства. До завершения показаны последние результаты.';
     }
-    if (_lastCycleCompleted == null)
+    if (_lastCycleCompleted == null) {
       return 'Запустите проверку сетевого доступа.';
+    }
     final hasSecureEvidence = _hosts.any(
       (host) => host.diagnosticResult?.hasSecureEvidence == true,
     );
     final prefix = hasSecureEvidence
         ? 'Защищённые соединения устанавливаются. '
         : 'Неудача контрольных соединений не доказывает отсутствие интернета. ';
-    return '${prefix}Откройте замечания в карточках. Авторизация, команды и соединение самого автомобиля не проверялись.';
+    return '$prefixОткройте замечания в карточках. Авторизация, команды и соединение самого автомобиля не проверялись.';
   }
 
   void _notify() {
@@ -95,8 +97,9 @@ class MonitorService extends ChangeNotifier {
 
   void startMonitoring({Duration interval = const Duration(seconds: 30)}) {
     if (_disposed || _isMonitoring) return;
-    if (interval <= Duration.zero)
+    if (interval <= Duration.zero) {
       throw ArgumentError.value(interval, 'interval');
+    }
     _interval = interval;
     _isMonitoring = true;
     _sessionId =
@@ -192,8 +195,9 @@ class MonitorService extends ChangeNotifier {
             final result = await cancellation.wait(
               _probe.check(status.host, cancellation),
             );
-            if (_disposed || cancellation.isCancelled || result.cancelled)
+            if (_disposed || cancellation.isCancelled || result.cancelled) {
               continue;
+            }
             status.applyResult(result);
             results.add(result);
             observations.add(
@@ -242,6 +246,39 @@ class MonitorService extends ChangeNotifier {
     } catch (error) {
       historyError = 'История не сохранена: $error';
       AppLogger.error('History save failed', error: error);
+    }
+    if (!_disposed && !cancellation.isCancelled) {
+      await _enrichLocations(cancellation);
+    }
+  }
+
+  Future<void> _enrichLocations(
+    CheckCancellation cancellation, {
+    HostStatus? tracedHost,
+  }) async {
+    final targets = tracedHost == null ? _hosts : [tracedHost];
+    final addresses = {for (final host in targets) host: host.resolvedIp};
+    final geo = await GeoIPService.getBatchLocation([
+      ...addresses.values,
+      if (tracedHost != null) ...tracedHost.hops.map((hop) => hop.ip),
+    ], cancellation: cancellation);
+    if (_disposed || cancellation.isCancelled) return;
+    for (final host in targets) {
+      if (host.resolvedIp == addresses[host]) {
+        final country = geo[host.resolvedIp]?['country'];
+        if (country != null) host.resolvedCountry = country;
+      }
+    }
+    if (tracedHost != null && geo.isNotEmpty) {
+      tracedHost.updateHops((hops) {
+        for (final hop in hops) {
+          final metadata = geo[hop.ip];
+          if (metadata != null) {
+            hop.country = metadata['country'];
+            hop.isp = metadata['isp'];
+          }
+        }
+      });
     }
   }
 
@@ -300,19 +337,25 @@ class MonitorService extends ChangeNotifier {
         );
         if (ip == target.address && hopResponse?.time != null) break;
       }
+      if (!_disposed && !cancellation.isCancelled) {
+        await _enrichLocations(cancellation, tracedHost: status);
+      }
     } on CheckCancelled {
-      if (!_disposed)
+      if (!_disposed) {
         status.traceMessage =
             'Трассировка остановлена. Сохранены полученные ответы.';
+      }
     } catch (error) {
-      if (!_disposed)
+      if (!_disposed) {
         status.traceMessage = 'ICMP-проверка не завершена: $error';
+      }
     } finally {
       watchdog.cancel();
       _traces.remove(status);
       if (!_disposed) {
-        if (cancellation.isCancelled)
+        if (cancellation.isCancelled) {
           status.traceMessage = 'Трассировка остановлена.';
+        }
         status.isTracing = false;
       }
     }
@@ -366,10 +409,11 @@ class MonitorService extends ChangeNotifier {
       for (var i = 0; i < steps.length; i++) {
         buffer.writeln('  ${names[i]}: ${steps[i].label}. ${steps[i].detail}');
       }
-      if (status.resolvedIp != null)
+      if (status.resolvedIp != null) {
         buffer.writeln(
           '  IP: ${status.resolvedIp} (${status.diagnosticResult?.addressFamily ?? 'не определено'})',
         );
+      }
       for (final attempt in status.diagnosticResult?.attempts ?? <String>[]) {
         buffer.writeln('  Попытка: $attempt');
       }
