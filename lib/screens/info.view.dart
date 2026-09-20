@@ -48,7 +48,7 @@ class InfoView extends StatelessWidget {
                     const SizedBox(height: 14),
                     _buildFeatures(),
                     const SizedBox(height: 14),
-                    _buildDeveloperCard(),
+                    _buildDeveloperCard(context),
                     const SizedBox(height: 24),
                     _buildFooter(),
                   ],
@@ -249,7 +249,7 @@ class InfoView extends StatelessWidget {
     );
   }
 
-  Widget _buildDeveloperCard() {
+  Widget _buildDeveloperCard(BuildContext context) {
     return Material(
       color: AppTheme.backgroundCard,
       shape: RoundedRectangleBorder(
