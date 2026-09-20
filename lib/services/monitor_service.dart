@@ -3,611 +3,339 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dart_ping/dart_ping.dart';
 import '../models/host_status.dart';
-import 'geoip_service.dart';
+import '../config/hosts_config.dart';
 import '../utils/logger.dart';
 import 'history_service.dart';
-import '../config/hosts_config.dart';
+import 'network_probe.dart';
 
 class MonitorService extends ChangeNotifier {
   late final List<HostStatus> _hosts;
-
-  MonitorService({List<HostStatus>? initialHosts}) {
-    _hosts =
-        initialHosts ??
-        HostsConfig.defaultHosts
-            .map(
-              (h) => HostStatus.unknown(h['category']!, h['name']!, h['host']!),
-            )
-            .toList();
-    HistoryService.init();
-  }
-
+  final NetworkProbe _probe;
+  final List<String> _controlHosts;
+  final bool _ownsHosts;
   bool _isMonitoring = false;
   bool _isCheckInProgress = false;
+  bool _disposed = false;
   bool? _internetAvailable;
   bool? _dnsAvailable;
   DateTime? _lastCycleCompleted;
   Timer? _timer;
-
+  Future<void>? _activeCycle;
+  CheckCancellation? _cycleCancellation;
+  Duration _interval = const Duration(seconds: 30);
+  String? _sessionId;
+  String? historyError;
+  final Map<HostStatus, CheckCancellation> _traces = {};
   static const int _parallelChecks = 3;
+  static int _sessionCounter = 0;
   static final _bracketRegex = RegExp(r'[\(\)]');
 
-  List<HostStatus> get hosts => _hosts;
+  MonitorService({
+    List<HostStatus>? initialHosts,
+    NetworkProbe? probe,
+    List<String> controlHosts = const ['example.com', 'www.cloudflare.com'],
+  }) : _probe = probe ?? NetworkProbe(),
+       _controlHosts = List.unmodifiable(controlHosts),
+       _ownsHosts = initialHosts == null {
+    _hosts = initialHosts ?? HostsConfig.defaultHosts.map((h) => HostStatus(
+      category: h['category']!,
+      name: h['name']!,
+      host: h['host']!,
+      isOptional: h['optional'] == 'true',
+    )).toList();
+    for (final host in _hosts) {
+      host.addListener(_notify);
+    }
+  }
+
+  List<HostStatus> get hosts => List.unmodifiable(_hosts);
+  List<HostStatus> get primaryHosts => _hosts.where((host) => !host.isOptional).toList();
   bool get isMonitoring => _isMonitoring;
   bool get isCheckInProgress => _isCheckInProgress;
   bool? get internetAvailable => _internetAvailable;
   bool? get dnsAvailable => _dnsAvailable;
   DateTime? get lastCycleCompleted => _lastCycleCompleted;
 
-  HostState get overallState {
-    if (_isCheckInProgress &&
-        _hosts.every(
-          (host) =>
-              host.state == HostState.unknown ||
-              host.state == HostState.checking,
-        )) {
-      return HostState.checking;
-    }
+  HostState get overallState => aggregateHostStates(primaryHosts.map((host) => host.state));
 
-    final downCount = _hosts.where((host) => host.state == HostState.down).length;
-    final degradedCount = _hosts
-        .where((host) => host.state == HostState.degraded)
-        .length;
-    final onlineCount = _hosts
-        .where((host) => host.state == HostState.online)
-        .length;
-
-    if (_internetAvailable == false && onlineCount == 0) {
-      return HostState.down;
-    }
-    if (downCount == _hosts.length && _hosts.isNotEmpty) {
-      return HostState.down;
-    }
-    if (downCount > 0 || degradedCount > 0) {
-      return HostState.degraded;
-    }
-    if (onlineCount == _hosts.length && _hosts.isNotEmpty) {
-      return HostState.online;
-    }
-    if (_isCheckInProgress) {
-      return HostState.checking;
-    }
-    return HostState.unknown;
-  }
-
-  String get diagnosisTitle {
-    switch (overallState) {
-      case HostState.online:
-        return 'Сервисы Li Auto доступны';
-      case HostState.degraded:
-        return 'Есть проблемы с сервисами Li Auto';
-      case HostState.down:
-        if (_internetAvailable == false) {
-          return 'Нет стабильного доступа к интернету';
-        }
-        return 'Сервисы Li Auto недоступны';
-      case HostState.checking:
-        return 'Выполняется диагностика';
-      case HostState.unknown:
-        return 'Ожидание первой проверки';
-    }
-  }
+  String get diagnosisTitle => switch (overallState) {
+    HostState.online => 'Сетевая доступность подтверждена',
+    HostState.degraded => 'Ответы серверов требуют внимания',
+    HostState.down => 'Соединение с адресами не установлено',
+    HostState.checking => 'Выполняется диагностика',
+    HostState.unknown => 'Недостаточно данных для вывода',
+  };
 
   String get diagnosisDetails {
-    final hasOnlineHost = _hosts.any(
-      (host) => host.state == HostState.online,
-    );
-    if (_internetAvailable == false && !hasOnlineHost) {
-      return 'Контрольное TCP-соединение с интернетом не установлено. '
-          'Проверьте Wi‑Fi, мобильную сеть или VPN.';
-    }
-
-    final dnsFailures = _hosts
-        .where((host) => host.isDnsAvailable == false)
-        .length;
-    final tcpFailures = _hosts
-        .where(
-          (host) =>
-              host.isDnsAvailable == true && host.isTcpAvailable == false,
-        )
-        .length;
-    final tlsFailures = _hosts
-        .where(
-          (host) =>
-              host.isTcpAvailable && host.isTlsAvailable == false,
-        )
-        .length;
-    final httpFailures = _hosts
-        .where(
-          (host) =>
-              host.isTlsAvailable == true && host.isHttpAvailable == false,
-        )
-        .length;
-
-    if (dnsFailures == _hosts.length && _hosts.isNotEmpty) {
-      return 'DNS не разрешает адреса Li Auto. Возможна проблема DNS, '
-          'фильтрация доменов или отсутствие сети.';
-    }
-    if (tcpFailures > 0) {
-      return 'Часть адресов разрешается через DNS, но соединение с TCP 443 '
-          'не устанавливается. Откройте карточку сервиса для деталей.';
-    }
-    if (tlsFailures > 0) {
-      return 'TCP-соединение устанавливается, но TLS-рукопожатие завершается '
-          'ошибкой на части сервисов.';
-    }
-    if (httpFailures > 0) {
-      return 'Сервер доступен по TLS, но HTTPS-запрос не получил ответа.';
-    }
-    if (overallState == HostState.online) {
-      return 'DNS, TCP 443, TLS и HTTPS отвечают. '
-          'Сетевая доступность сервисов выглядит нормальной.';
-    }
     if (_isCheckInProgress) {
-      return 'Проверяем интернет, DNS, TCP 443, TLS и HTTPS для каждого сервиса.';
+      return 'Проверяем адреса с этого устройства. До завершения показаны последние результаты.';
     }
-    return 'Запустите или обновите мониторинг, чтобы получить диагноз.';
+    if (_lastCycleCompleted == null) return 'Запустите проверку сетевого доступа.';
+    final hasSecureEvidence = _hosts.any((host) => host.diagnosticResult?.hasSecureEvidence == true);
+    final prefix = hasSecureEvidence
+        ? 'Защищённые соединения устанавливаются. '
+        : 'Неудача контрольных соединений не доказывает отсутствие интернета. ';
+    return '${prefix}Откройте замечания в карточках. Авторизация, команды и соединение самого автомобиля не проверялись.';
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   void startMonitoring({Duration interval = const Duration(seconds: 30)}) {
-    if (_isMonitoring) return;
+    if (_disposed || _isMonitoring) return;
+    if (interval <= Duration.zero) throw ArgumentError.value(interval, 'interval');
+    _interval = interval;
     _isMonitoring = true;
-    notifyListeners();
-
-    _timer = Timer.periodic(interval, (_) {
+    _sessionId = '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
+    if (_cycleCancellation?.isCancelled == true && _activeCycle != null) {
+      unawaited(_activeCycle!.then((_) {
+        if (_isMonitoring && !_disposed) unawaited(_checkAllHosts());
+      }));
+    } else {
       unawaited(_checkAllHosts());
-    });
-    unawaited(_checkAllHosts());
+    }
+    _notify();
   }
 
   void stopMonitoring() {
     _timer?.cancel();
+    _timer = null;
     _isMonitoring = false;
-    notifyListeners();
+    _sessionId = null;
+    _cycleCancellation?.cancel();
+    for (final token in _traces.values) {
+      token.cancel();
+    }
+    unawaited(HistoryService.flush().catchError((Object error) {
+      AppLogger.error('History flush failed', error: error);
+    }));
+    _notify();
   }
 
-  Future<void> refreshAllHosts() async {
-    await _checkAllHosts();
-  }
+  Future<void> refreshAllHosts() => _checkAllHosts();
 
-  Future<void> _checkAllHosts() async {
-    if (_isCheckInProgress) return;
-
+  Future<void> _checkAllHosts() {
+    if (_disposed) return Future.value();
+    if (_activeCycle != null) return _activeCycle!;
+    _timer?.cancel();
+    final completer = Completer<void>();
+    _activeCycle = completer.future;
     _isCheckInProgress = true;
-    notifyListeners();
-
-    try {
-      await _checkNetworkBaseline();
-
-      for (int i = 0; i < _hosts.length; i += _parallelChecks) {
-        final end = (i + _parallelChecks).clamp(0, _hosts.length).toInt();
-        final batch = _hosts.sublist(i, end);
-        await Future.wait(batch.map(_checkHost));
-      }
-
-      await HistoryService.saveSnapshot({
-        for (final hostStatus in _hosts)
-          hostStatus.host: hostStatus.isOnline,
-      });
-      _lastCycleCompleted = DateTime.now();
-    } catch (e, stackTrace) {
-      AppLogger.error(
-        'Monitoring cycle failed',
-        error: e,
-        stackTrace: stackTrace,
-      );
-    } finally {
-      _isCheckInProgress = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _checkNetworkBaseline() async {
-    bool dnsAvailable = false;
-    bool internetAvailable = false;
-
-    try {
-      final addresses = await InternetAddress.lookup(
-        'example.com',
-      ).timeout(const Duration(seconds: 4));
-      dnsAvailable = addresses.isNotEmpty;
-    } catch (_) {
-      dnsAvailable = false;
-    }
-
-    try {
-      final socket = await Socket.connect(
-        '1.1.1.1',
-        443,
-        timeout: const Duration(seconds: 4),
-      );
-      await socket.close();
-      internetAvailable = true;
-    } catch (_) {
-      internetAvailable = false;
-    }
-
-    if (!internetAvailable && dnsAvailable) {
+    final cancellation = CheckCancellation();
+    _cycleCancellation = cancellation;
+    final sessionId = _sessionId ?? '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
+    final watchdog = Timer(const Duration(seconds: 60), cancellation.cancel);
+    _notify();
+    unawaited(() async {
       try {
-        final socket = await Socket.connect(
-          'example.com',
-          443,
-          timeout: const Duration(seconds: 4),
-        );
-        await socket.close();
-        internetAvailable = true;
-      } catch (_) {
-        internetAvailable = false;
+        await _runCycle(cancellation, sessionId);
+      } catch (error, stackTrace) {
+        AppLogger.error('Monitoring cycle failed', error: error, stackTrace: stackTrace);
+      } finally {
+        watchdog.cancel();
+        _isCheckInProgress = false;
+        _activeCycle = null;
+        if (!_disposed) {
+          for (final host in _hosts) {
+            if (host.isChecking) host.cancelCheck();
+          }
+          if (_isMonitoring) {
+            _timer = Timer(_interval, () => unawaited(_checkAllHosts()));
+          }
+          _notify();
+        }
+        completer.complete();
       }
-    }
-
-    _dnsAvailable = dnsAvailable;
-    _internetAvailable = internetAvailable;
+    }());
+    return completer.future;
   }
 
-  Future<void> _checkHost(HostStatus status) async {
-    status.state = HostState.checking;
-    status.errorMessage = null;
-    status.diagnosis = null;
-    status.isDnsAvailable = null;
-    status.isTcpAvailable = false;
-    status.isTlsAvailable = null;
-    status.isHttpAvailable = null;
-    status.httpStatusCode = null;
-    status.rtt = null;
-
-    try {
-      final addresses = await InternetAddress.lookup(
-        status.host,
-      ).timeout(const Duration(seconds: 5));
-
-      if (addresses.isEmpty) {
-        throw const SocketException('DNS returned no addresses');
-      }
-
-      status.isDnsAvailable = true;
-      status.resolvedIp = addresses.first.address;
-    } catch (e) {
-      status.isDnsAvailable = false;
-      status.state = HostState.down;
-      status.errorMessage = _internetAvailable == false
-          ? 'Нет общего доступа к интернету'
-          : 'DNS не разрешает адрес сервиса';
-      status.diagnosis =
-          'Не удалось получить IP-адрес ${status.host}: $e';
-      status.lastChecked = DateTime.now();
-      return;
-    }
-
-    final tcpResult = await _checkTcpAvailability(status.host);
-    status.isTcpAvailable = tcpResult.available;
-
-    if (!tcpResult.available) {
-      status.isTlsAvailable = false;
-      status.isHttpAvailable = false;
-      status.state = HostState.down;
-      status.errorMessage = _internetAvailable == false
-          ? 'Нет общего доступа к интернету'
-          : tcpResult.error ?? 'TCP 443 недоступен';
-      status.diagnosis = tcpResult.error;
-      status.lastChecked = DateTime.now();
-      await _updatePingMetadata(status);
-      return;
-    }
-
-    final tlsResult = await _checkTlsAvailability(status.host);
-    status.isTlsAvailable = tlsResult.available;
-
-    if (!tlsResult.available) {
-      status.isHttpAvailable = false;
-      status.state = HostState.down;
-      status.errorMessage = tlsResult.error ?? 'Ошибка TLS';
-      status.diagnosis =
-          'TCP 443 доступен, но защищённое TLS-соединение не установлено.';
-      status.lastChecked = DateTime.now();
-      await _updatePingMetadata(status);
-      return;
-    }
-
-    final httpResult = await _checkHttpAvailability(status.host);
-    status.isHttpAvailable = httpResult.available;
-    status.httpStatusCode = httpResult.statusCode;
-
-    if (httpResult.available) {
-      status.state = HostState.online;
-      status.errorMessage = null;
-      status.diagnosis = httpResult.statusCode != null
-          ? 'HTTPS отвечает, код ${httpResult.statusCode}.'
-          : 'HTTPS отвечает.';
-    } else {
-      status.state = HostState.degraded;
-      status.errorMessage = httpResult.error ?? 'HTTPS не получил ответа';
-      status.diagnosis =
-          'DNS, TCP и TLS работают, но HTTP-уровень не ответил корректно.';
-    }
-
-    status.lastChecked = DateTime.now();
-    await _updatePingMetadata(status);
-  }
-
-  Future<void> _updatePingMetadata(HostStatus status) async {
-    final ping = Ping(status.host, count: 1);
-
-    try {
-      PingResponse? bestResponse;
-
-      await for (final event in ping.stream.timeout(
-        const Duration(seconds: 5),
-      )) {
-        AppLogger.debug('Ping Event for ${status.host}: $event');
-        if (event.response != null) {
-          bestResponse = event.response;
-          if (bestResponse?.time != null) break;
-        }
-        if (event.error != null) break;
-      }
-
-      if (bestResponse != null) {
-        status.rtt = bestResponse.time?.inMilliseconds.toDouble();
-
-        final pingIp = bestResponse.ip
-            ?.replaceAll(_bracketRegex, '')
-            .trim();
-        if (pingIp != null && pingIp.isNotEmpty) {
-          status.resolvedIp = pingIp;
+  Future<void> _runCycle(CheckCancellation cancellation, String sessionId) async {
+    final results = <DiagnosticResult>[];
+    final observations = <HistoryEntry>[];
+    var next = 0;
+    final total = _hosts.length + _controlHosts.length;
+    Future<void> worker() async {
+      while (!cancellation.isCancelled && !_disposed && next < total) {
+        final index = next++;
+        if (index < _hosts.length) {
+          final status = _hosts[index];
+          status.beginCheck();
+          try {
+            final result = await cancellation.wait(_probe.check(status.host, cancellation));
+            if (_disposed || cancellation.isCancelled || result.cancelled) continue;
+            status.applyResult(result);
+            results.add(result);
+            observations.add(HistoryEntry(
+              host: status.host,
+              timestamp: result.checkedAt,
+              state: result.state,
+              sessionId: sessionId,
+            ));
+          } on CheckCancelled {
+            if (!_disposed) status.cancelCheck();
+          } catch (error) {
+            if (!_disposed) status.cancelCheck();
+            AppLogger.error('Host check failed: ${status.host}', error: error);
+          }
+        } else {
+          try {
+            final result = await cancellation.wait(
+              _probe.check(_controlHosts[index - _hosts.length], cancellation),
+            );
+            if (!result.cancelled) results.add(result);
+          } on CheckCancelled {
+            break;
+          } catch (error) {
+            AppLogger.debug('Control check failed: $error');
+          }
         }
       }
-    } catch (_) {
-      // ICMP can be blocked even when HTTPS works, so it does not define health.
     }
-
-    if (status.resolvedIp != null) {
-      final geo = await GeoIPService.getBatchLocation([status.resolvedIp!]);
-      if (geo.containsKey(status.resolvedIp)) {
-        status.resolvedCountry = geo[status.resolvedIp!]!['country'];
-      }
+    await Future.wait(List.generate(_parallelChecks, (_) => worker()));
+    if (_disposed || cancellation.isCancelled) return;
+    // Positive evidence from Li Auto outweighs failure of external control hosts.
+    // A failed set of probes alone is not proof that the entire internet is down.
+    _internetAvailable = results.any((result) => result.hasSecureEvidence) ? true : null;
+    _dnsAvailable = results.isEmpty ? null : results.any((result) => result.steps[0].available == true);
+    _lastCycleCompleted = DateTime.now();
+    try {
+      await HistoryService.saveObservations(observations);
+      historyError = null;
+    } catch (error) {
+      historyError = 'История не сохранена: $error';
+      AppLogger.error('History save failed', error: error);
     }
-
   }
 
   Future<void> traceHost(HostStatus status) async {
-    if (status.isTracing) return;
-    status.isTracing = true;
+    if (_disposed || _traces.containsKey(status)) return;
+    final cancellation = CheckCancellation();
+    _traces[status] = cancellation;
+    status.traceMessage = 'ICMP-маршрут. Отсутствие ответа узла не доказывает блокировку.';
     status.hops = [];
-    notifyListeners();
-
-    final Set<String> ipsToQuery = {};
-
-    for (int ttl = 1; ttl <= 20; ttl++) {
-      if (!status.isTracing) break;
-
-      final ping = Ping(status.host, count: 1, ttl: ttl, timeout: 2);
-      try {
+    status.isTracing = true;
+    final watchdog = Timer(const Duration(seconds: 65), cancellation.cancel);
+    try {
+      var target = InternetAddress.tryParse(status.resolvedIp ?? '');
+      target ??= (await cancellation.wait(
+        _probe.lookup(status.host),
+        timeout: const Duration(seconds: 4),
+      )).firstOrNull;
+      if (target == null) throw const SocketException('Нет IP для трассировки');
+      if (target.type != InternetAddressType.IPv4) {
+        throw UnsupportedError('Этот ICMP-адаптер не проверяет IPv6. HTTPS-проверка IPv6 поддерживается.');
+      }
+      status.traceMessage = 'ICMP до ${target.address}. Молчание узла не означает блокировку.';
+      for (var ttl = 1; ttl <= 20 && !cancellation.isCancelled; ttl++) {
+        // Construct inside try: unsupported platforms may throw before streaming.
+        final ping = Ping(target.address, count: 1, ttl: ttl, timeout: 2);
+        final removeCancel = cancellation.onCancel(() => unawaited(_stopPing(ping)));
         PingResponse? hopResponse;
-
-        await for (final event in ping.stream.timeout(
-          const Duration(seconds: 3),
-        )) {
-          AppLogger.debug('Trace Event for ${status.host} (TTL $ttl): $event');
-
-          if (event.response != null && event.response!.ip != null) {
-            hopResponse = event.response;
-            break;
-          }
-
-          if (event.error != null) {
-            break;
-          }
-
-          if (event.summary != null) break;
+        try {
+          hopResponse = await cancellation.wait(_readHop(ping), timeout: const Duration(seconds: 3));
+        } on TimeoutException {
+          // A silent hop is unknown, not a packet-loss measurement.
+        } finally {
+          removeCancel();
+          await _stopPing(ping);
         }
-
-        if (hopResponse != null && hopResponse.ip != null) {
-          final rawIp = hopResponse.ip!;
-          final ip = rawIp.replaceAll(_bracketRegex, '').trim();
-          final time = hopResponse.time?.inMilliseconds.toDouble() ?? 0;
-
-          final hop = HopInfo(
-            number: ttl,
-            ip: ip,
-            time: time > 0 ? time : null,
-          );
-
-          ipsToQuery.add(ip);
-          status.updateHops((hops) => hops.add(hop));
-
-          if (ip == status.resolvedIp) {
-            break;
-          }
-        } else {
-          status.updateHops(
-            (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
-          );
-        }
-      } catch (_) {
-        status.updateHops(
-          (hops) => hops.add(HopInfo(number: ttl, ip: null, time: null)),
-        );
+        if (_disposed || cancellation.isCancelled) break;
+        final ip = hopResponse?.ip?.replaceAll(_bracketRegex, '').trim();
+        final time = hopResponse?.time?.inMicroseconds;
+        status.updateHops((hops) => hops.add(HopInfo(
+          number: ttl,
+          ip: ip,
+          time: time == null ? null : time / 1000.0,
+        )));
+        if (ip == target.address && hopResponse?.time != null) break;
       }
-    }
-
-    if (ipsToQuery.isNotEmpty) {
-      final geo = await GeoIPService.getBatchLocation(ipsToQuery.toList());
-      for (var hop in status.hops) {
-        if (hop.ip != null && geo.containsKey(hop.ip)) {
-          hop.country = geo[hop.ip]!['country'];
-          hop.isp = geo[hop.ip]!['isp'];
-        }
-      }
-      notifyListeners();
-    }
-
-    status.isTracing = false;
-    notifyListeners();
-  }
-
-  Future<({bool available, String? error})> _checkTcpAvailability(
-    String host,
-  ) async {
-    try {
-      final socket = await Socket.connect(
-        host,
-        443,
-        timeout: const Duration(seconds: 5),
-      );
-      await socket.close();
-      return (available: true, error: null);
-    } on TimeoutException {
-      return (available: false, error: 'Таймаут TCP 443');
-    } on SocketException catch (e) {
-      final message = e.message.toLowerCase();
-      if (message.contains('refused')) {
-        return (available: false, error: 'Сервер отклонил TCP 443');
-      }
-      if (message.contains('timed out') || message.contains('timeout')) {
-        return (available: false, error: 'Таймаут TCP 443');
-      }
-      return (available: false, error: 'TCP 443 недоступен: ${e.message}');
-    } catch (e) {
-      return (available: false, error: 'Ошибка TCP 443: $e');
-    }
-  }
-
-  Future<({bool available, String? error})> _checkTlsAvailability(
-    String host,
-  ) async {
-    try {
-      final socket = await SecureSocket.connect(
-        host,
-        443,
-        timeout: const Duration(seconds: 5),
-      );
-      await socket.close();
-      return (available: true, error: null);
-    } on TimeoutException {
-      return (available: false, error: 'Таймаут TLS-рукопожатия');
-    } on HandshakeException catch (e) {
-      return (available: false, error: 'Ошибка TLS-сертификата: ${e.message}');
-    } on SocketException catch (e) {
-      return (available: false, error: 'Ошибка TLS: ${e.message}');
-    } catch (e) {
-      return (available: false, error: 'Ошибка TLS: $e');
-    }
-  }
-
-  Future<
-    ({bool available, int? statusCode, String? error})
-  > _checkHttpAvailability(String host) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 5);
-
-    try {
-      final request = await client
-          .headUrl(Uri.https(host, '/'))
-          .timeout(const Duration(seconds: 5));
-      request.followRedirects = false;
-      request.headers.set(HttpHeaders.userAgentHeader, 'LiAutoMonitor/1.1');
-
-      final response = await request.close().timeout(
-        const Duration(seconds: 5),
-      );
-      final statusCode = response.statusCode;
-      await response.drain();
-
-      return (
-        available: true,
-        statusCode: statusCode,
-        error: null,
-      );
-    } on TimeoutException {
-      return (
-        available: false,
-        statusCode: null,
-        error: 'Таймаут HTTPS',
-      );
-    } on HttpException catch (e) {
-      return (
-        available: false,
-        statusCode: null,
-        error: 'Ошибка HTTPS: ${e.message}',
-      );
-    } on SocketException catch (e) {
-      return (
-        available: false,
-        statusCode: null,
-        error: 'Ошибка HTTPS: ${e.message}',
-      );
-    } catch (e) {
-      return (
-        available: false,
-        statusCode: null,
-        error: 'Ошибка HTTPS: $e',
-      );
+    } on CheckCancelled {
+      if (!_disposed) status.traceMessage = 'Трассировка остановлена. Сохранены полученные ответы.';
+    } catch (error) {
+      if (!_disposed) status.traceMessage = 'ICMP-проверка не завершена: $error';
     } finally {
-      client.close(force: true);
+      watchdog.cancel();
+      _traces.remove(status);
+      if (!_disposed) {
+        if (cancellation.isCancelled) status.traceMessage = 'Трассировка остановлена.';
+        status.isTracing = false;
+      }
+    }
+  }
+
+  void stopTrace(HostStatus status) => _traces[status]?.cancel();
+
+  Future<PingResponse?> _readHop(Ping ping) async {
+    await for (final event in ping.stream) {
+      if (event.response?.ip != null) return event.response;
+      if (event.summary != null) break;
+    }
+    return null;
+  }
+
+  Future<void> _stopPing(Ping ping) async {
+    try {
+      await ping.stop().timeout(const Duration(seconds: 1));
+    } catch (error) {
+      AppLogger.debug('Ping cleanup: $error');
     }
   }
 
   String generateReport() {
-    final buffer = StringBuffer();
-    final now = DateTime.now();
-
-    buffer.writeln('Li Auto Monitor 1.1');
-    buffer.writeln(now.toIso8601String());
-    buffer.writeln();
-    buffer.writeln('Общий диагноз: $diagnosisTitle');
-    buffer.writeln('Интернет: ${_formatBool(_internetAvailable)}');
-    buffer.writeln('DNS: ${_formatBool(_dnsAvailable)}');
-    buffer.writeln();
-
+    final buffer = StringBuffer()
+      ..writeln('Li Auto Monitor — сетевая диагностика')
+      ..writeln(DateTime.now().toIso8601String())
+      ..writeln('Проверка с текущего устройства. Функции автомобиля не проверялись.')
+      ..writeln('Режим: прямое соединение; HTTP-прокси не используется.')
+      ..writeln('Общий вывод: $diagnosisTitle')
+      ..writeln('Защищённый доступ к внешним адресам: ${_formatBool(_internetAvailable)}')
+      ..writeln('DNS: ${_formatBool(_dnsAvailable)}');
+    const names = ['DNS', 'TCP', 'TLS', 'HTTPS'];
     for (final status in _hosts) {
-      buffer.writeln('${status.name} (${status.host})');
-      buffer.writeln('  Состояние: ${_formatState(status.state)}');
-      buffer.writeln('  DNS: ${_formatBool(status.isDnsAvailable)}');
-      buffer.writeln('  TCP 443: ${_formatBool(status.isTcpAvailable)}');
-      buffer.writeln('  TLS: ${_formatBool(status.isTlsAvailable)}');
-      buffer.writeln(
-        '  HTTPS: ${_formatBool(status.isHttpAvailable)}'
-        '${status.httpStatusCode != null ? ' (${status.httpStatusCode})' : ''}',
-      );
-      buffer.writeln(
-        '  RTT: ${status.rtt != null ? '${status.rtt!.toStringAsFixed(1)} ms' : '—'}',
-      );
-      if (status.resolvedIp != null) {
-        buffer.writeln('  IP: ${status.resolvedIp}');
+      buffer
+        ..writeln()
+        ..writeln('${status.name} (${status.host})${status.isOptional ? ' [дополнительный адрес]' : ''}')
+        ..writeln('  Состояние: ${status.state.name}${status.isChecking ? ' (обновляется)' : ''}')
+        ..writeln('  Измерено: ${status.lastChecked?.toIso8601String() ?? 'нет данных'}');
+      final steps = status.checkSteps;
+      for (var i = 0; i < steps.length; i++) {
+        buffer.writeln('  ${names[i]}: ${steps[i].label}. ${steps[i].detail}');
       }
-      if (status.errorMessage != null) {
-        buffer.writeln('  Ошибка: ${status.errorMessage}');
+      if (status.resolvedIp != null) buffer.writeln('  IP: ${status.resolvedIp} (${status.diagnosticResult?.addressFamily ?? 'не определено'})');
+      for (final attempt in status.diagnosticResult?.attempts ?? <String>[]) {
+        buffer.writeln('  Попытка: $attempt');
       }
-      buffer.writeln();
+      if (status.hops.isNotEmpty) {
+        buffer.writeln('  ${status.traceMessage ?? 'ICMP-маршрут'}');
+        for (final hop in status.hops) {
+          buffer.writeln('    ${hop.number}: ${hop.ip ?? 'нет ответа'} ${hop.time == null ? '' : '${hop.time} мс'}');
+        }
+      }
     }
-
+    if (historyError != null) buffer.writeln(historyError);
     return buffer.toString().trimRight();
   }
 
-  String _formatBool(bool? value) {
-    if (value == null) return '—';
-    return value ? 'OK' : 'FAIL';
-  }
-
-  String _formatState(HostState state) {
-    switch (state) {
-      case HostState.online:
-        return 'ONLINE';
-      case HostState.degraded:
-        return 'DEGRADED';
-      case HostState.down:
-        return 'DOWN';
-      case HostState.checking:
-        return 'CHECKING';
-      case HostState.unknown:
-        return 'UNKNOWN';
-    }
-  }
+  String _formatBool(bool? value) => value == null ? 'не подтверждено' : value ? 'OK' : 'ошибка проверки';
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _timer?.cancel();
+    _cycleCancellation?.cancel();
+    for (final token in _traces.values) {
+      token.cancel();
+    }
+    for (final host in _hosts) {
+      host.removeListener(_notify);
+      if (_ownsHosts) host.dispose();
+    }
+    unawaited(HistoryService.flush().catchError((Object error) {
+      AppLogger.error('History flush failed', error: error);
+    }));
     super.dispose();
   }
 }
