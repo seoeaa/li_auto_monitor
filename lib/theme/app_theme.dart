@@ -52,7 +52,7 @@ class AppTheme {
   static List<BoxShadow> glowShadow(Color color, {double intensity = 0.3}) {
     return [
       BoxShadow(
-        color: color.withOpacity(intensity * 0.45),
+        color: color.withValues(alpha: intensity * 0.45),
         blurRadius: 18,
         spreadRadius: 0,
       ),
@@ -61,7 +61,7 @@ class AppTheme {
 
   static List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.22),
+      color: Colors.black.withValues(alpha: 0.22),
       blurRadius: 18,
       offset: const Offset(0, 8),
     ),
@@ -98,8 +98,8 @@ class AppTheme {
         error: statusDown,
       ),
       dividerColor: borderSubtle,
-      splashColor: primaryCyan.withOpacity(0.06),
-      highlightColor: primaryCyan.withOpacity(0.03),
+      splashColor: primaryCyan.withValues(alpha: 0.06),
+      highlightColor: primaryCyan.withValues(alpha: 0.03),
       appBarTheme: const AppBarTheme(
         backgroundColor: backgroundDark,
         foregroundColor: textPrimary,
