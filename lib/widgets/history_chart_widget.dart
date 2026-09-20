@@ -178,7 +178,7 @@ class _HistoryChartWidgetState extends State<HistoryChartWidget> {
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppTheme.primaryCyan.withOpacity(0.12)
+                    ? AppTheme.primaryCyan.withValues(alpha: 0.12)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
               ),
@@ -314,7 +314,7 @@ class UptimePainter extends CustomPainter {
     if (totalMs <= 0) return;
 
     final backgroundPaint = Paint()
-      ..color = AppTheme.borderSubtle.withOpacity(0.45);
+      ..color = AppTheme.borderSubtle.withValues(alpha: 0.45);
     canvas.drawRect(Offset.zero & size, backgroundPaint);
 
     final paint = Paint();
@@ -341,8 +341,8 @@ class UptimePainter extends CustomPainter {
       if (right <= left) continue;
 
       paint.color = entry.isOnline
-          ? AppTheme.statusOnline.withOpacity(0.82)
-          : AppTheme.statusDown.withOpacity(0.82);
+          ? AppTheme.statusOnline.withValues(alpha: 0.82)
+          : AppTheme.statusDown.withValues(alpha: 0.82);
 
       canvas.drawRect(
         Rect.fromLTRB(left, 0, right, size.height),
