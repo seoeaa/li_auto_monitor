@@ -31,8 +31,6 @@ import 'package:li_auto_monitor/screens/dashboard.view.dart';
 import 'package:li_auto_monitor/widgets/tcp_status_indicator.dart';
 import 'package:li_auto_monitor/theme/app_theme.dart';
 
-// These assertions exercise the initial presentation; live scheduling and
-// cancellation have separate service tests using controlled probes.
 class IdleMonitor extends MonitorService {
   IdleMonitor(List<HostStatus> hosts) : super(initialHosts: hosts, controlHosts: []);
   @override
@@ -76,7 +74,54 @@ void main() {
 }
 ''')
 
+p = root / 'test/network_probe_test.dart'
+s = p.read_text()
+if 'fragmented HTTP headers' not in s:
+    s = "import 'dart:convert';\n" + s
+    pos = s.rfind('\n}')
+    s = s[:pos] + r'''
+  test('fragmented HTTP headers and informational responses are parsed', () async {
+    handler = (request) async {
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.add(ascii.encode('HTTP/1.1 103 Early Hints\r\nLink: </a>\r\n\r\nHTTP/1.1 204'));
+      await socket.flush();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      socket.add(ascii.encode(' No Content\r\nConnection: close\r\n\r\n'));
+      await socket.close();
+    };
+    final result = await probe().check('localhost', CheckCancellation(), port: server.port);
+    expect(result.httpStatusCode, 204);
+    expect(result.state, HostState.online);
+  });
+
+  test('invalid HTTP status remains a protocol failure after verified TLS', () async {
+    handler = (request) async {
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.add(ascii.encode('INVALID RESPONSE\r\n\r\n'));
+      await socket.close();
+    };
+    final result = await probe().check('localhost', CheckCancellation(), port: server.port);
+    expect(result.hasSecureEvidence, isTrue);
+    expect(result.steps[3].state, CheckState.failure);
+    expect(result.state, HostState.degraded);
+  });
+
+  test('oversized HTTP headers terminate without unbounded buffering', () async {
+    handler = (request) async {
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.add(ascii.encode('HTTP/1.1 200 OK\r\nX-Large: ${List.filled(70000, 'x').join()}\r\n\r\n'));
+      await socket.close();
+    };
+    final result = await probe().check('localhost', CheckCancellation(), port: server.port);
+    expect(result.hasSecureEvidence, isTrue);
+    expect(result.steps[3].state, CheckState.failure);
+    expect(result.summary, contains('64'));
+  });
+''' + s[pos:]
+p.write_text(s)
+
 p = root / 'README.md'
 s = p.read_text().replace('На этом же соединении HttpClient выполняет TLS', 'На этом же соединении RawSecureSocket выполняет TLS')
 p.write_text(s)
+subprocess.run(['git', 'add', 'README.md'], cwd=root, check=True)
 subprocess.run(['dart', 'format', 'lib', 'test'], cwd=root, check=True)
