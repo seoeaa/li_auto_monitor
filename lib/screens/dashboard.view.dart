@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/host_status.dart';
@@ -19,12 +21,14 @@ class _DashboardViewState extends State<DashboardView>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  static final _timeFormat = DateFormat('HH:mm:ss');
+
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 360),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
@@ -59,13 +63,16 @@ class _DashboardViewState extends State<DashboardView>
                 await monitor.refreshAllHosts();
               },
               color: AppTheme.primaryCyan,
-              backgroundColor: AppTheme.backgroundCard,
+              backgroundColor: AppTheme.backgroundCardElevated,
               child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 slivers: [
                   _buildAppBar(),
-                  _buildStatsSection(),
-                  _buildHostsList(),
+                  _buildDiagnosisSection(),
+                  _buildServiceGroups(),
+                  const SliverToBoxAdapter(child: SizedBox(height: 28)),
                 ],
               ),
             ),
@@ -77,386 +84,708 @@ class _DashboardViewState extends State<DashboardView>
 
   Widget _buildAppBar() {
     return SliverAppBar(
-      expandedHeight: 120,
-      floating: false,
       pinned: true,
-      backgroundColor: Colors.transparent,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ShaderMask(
-                      shaderCallback: (bounds) =>
-                          AppTheme.primaryGradient.createShader(bounds),
-                      child: const Text(
-                        'Li Auto Monitor',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 28,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Мониторинг сервисов',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+      floating: false,
+      automaticallyImplyLeading: false,
+      toolbarHeight: 72,
+      titleSpacing: 20,
+      backgroundColor: AppTheme.backgroundDark.withValues(alpha: 0.96),
+      surfaceTintColor: Colors.transparent,
+      title: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryCyan.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+              border: Border.all(
+                color: AppTheme.primaryCyan.withValues(alpha: 0.16),
               ),
-              _buildHistoryButton(),
-              const SizedBox(width: 12),
-              _buildInfoButton(),
-            ],
+            ),
+            child: const Icon(
+              Icons.monitor_heart_outlined,
+              color: AppTheme.primaryCyan,
+              size: 20,
+            ),
           ),
-        ),
+          const SizedBox(width: 11),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Li Auto Monitor',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    letterSpacing: -0.25,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Диагностика сети и сервисов',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppTheme.textTertiary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+      actions: [
+        _buildHeaderButton(
+          icon: Icons.history_rounded,
+          tooltip: 'История',
+          onPressed: _showHistoryBottomSheet,
+        ),
+        const SizedBox(width: 6),
+        _buildHeaderButton(
+          icon: Icons.info_outline_rounded,
+          tooltip: 'О приложении',
+          onPressed: _openInfo,
+        ),
+        const SizedBox(width: 14),
+      ],
     );
   }
 
-  Widget _buildHistoryButton() {
-    return GestureDetector(
-      onTap: () => _showHistoryBottomSheet(),
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppTheme.backgroundCardGlass,
+  Widget _buildHeaderButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        fixedSize: const Size(40, 40),
+        backgroundColor: AppTheme.backgroundCardElevated,
+        foregroundColor: AppTheme.textSecondary,
+        side: const BorderSide(color: AppTheme.borderSubtle),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
         ),
-        child: const Icon(Icons.history, color: Colors.white70, size: 22),
+      ),
+      icon: Icon(icon, size: 19),
+    );
+  }
+
+  void _openInfo() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const InfoView(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 220),
       ),
     );
   }
 
   void _showHistoryBottomSheet() {
     final monitor = Provider.of<MonitorService>(context, listen: false);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: AppTheme.backgroundDark,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppTheme.radiusXLarge),
-            ),
-            gradient: AppTheme.backgroundGradient,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'История доступности',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollController,
-                  itemCount: monitor.hosts.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    return HistoryChartWidget(host: monitor.hosts[index]);
-                  },
-                  padding: const EdgeInsets.only(bottom: 40),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+      builder: (sheetContext) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth > 860
+                ? 860.0
+                : constraints.maxWidth;
 
-  Widget _buildInfoButton() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const InfoView(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: width,
+                height: constraints.maxHeight * 0.88,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: AppTheme.backgroundDark,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(AppTheme.radiusXLarge),
+                    ),
+                    border: Border(
+                      top: BorderSide(color: AppTheme.borderSubtle),
+                      left: BorderSide(color: AppTheme.borderSubtle),
+                      right: BorderSide(color: AppTheme.borderSubtle),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'История доступности',
+                                    style: TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Доступность сервисов за выбранный период',
+                                    style: TextStyle(
+                                      color: AppTheme.textTertiary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Закрыть',
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                          itemCount: monitor.hosts.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            return HistoryChartWidget(
+                              host: monitor.hosts[index],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppTheme.backgroundCardGlass,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
-        ),
-        child: const Icon(Icons.info_outline, color: Colors.white70, size: 22),
-      ),
     );
   }
 
-  Widget _buildStatsSection() {
+  Widget _buildDiagnosisSection() {
     return SliverToBoxAdapter(
-      child:
-          Selector<
-            MonitorService,
-            ({int online, int down, int total, bool isMonitoring})
-          >(
-            selector: (_, monitor) {
-              final onlineCount = monitor.hosts
-                  .where((h) => h.state == HostState.online)
-                  .length;
-              final downCount = monitor.hosts
-                  .where((h) => h.state == HostState.down)
-                  .length;
-              return (
-                online: onlineCount,
-                down: downCount,
-                total: monitor.hosts.length,
-                isMonitoring: monitor.isMonitoring,
-              );
-            },
-            builder: (context, data, child) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Consumer<MonitorService>(
+        builder: (context, monitor, child) {
+          final state = monitor.overallState;
+          final color = _statusColor(state);
+          final onlineCount = monitor.hosts
+              .where((host) => host.state == HostState.online)
+              .length;
+          final problemCount = monitor.hosts
+              .where(
+                (host) =>
+                    host.state == HostState.down ||
+                    host.state == HostState.degraded,
+              )
+              .length;
+          final total = monitor.hosts.length;
+          final lastChecked = monitor.lastCycleCompleted != null
+              ? _timeFormat.format(monitor.lastCycleCompleted!)
+              : 'ещё не завершена';
+
+          return _content(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundCard,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
+                  border: Border.all(
+                    color: state == HostState.online
+                        ? AppTheme.borderSubtle
+                        : color.withValues(alpha: 0.28),
+                  ),
+                  boxShadow: AppTheme.cardShadow,
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.check_circle_outline,
-                            label: 'Онлайн',
-                            value: '${data.online}/${data.total}',
-                            color: AppTheme.statusOnline,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF00FFC2), Color(0xFF00D4AA)],
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.11),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMedium,
                             ),
                           ),
+                          child: Icon(
+                            _statusIcon(state),
+                            color: color,
+                            size: 24,
+                          ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.error_outline,
-                            label: 'Проблемы',
-                            value: '${data.down}',
-                            color: AppTheme.statusDown,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                monitor.diagnosisTitle,
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.25,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                monitor.diagnosisDetails,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildStatusBadge(data.isMonitoring),
+                    if (monitor.isCheckInProgress) ...[
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: const LinearProgressIndicator(
+                          minHeight: 3,
+                          backgroundColor: AppTheme.backgroundCardElevated,
+                          color: AppTheme.accentBlue,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildMetricChip(
+                          icon: Icons.dns_outlined,
+                          label: 'Сервисы',
+                          value: '$onlineCount/$total',
+                          color: onlineCount == total && total > 0
+                              ? AppTheme.statusOnline
+                              : AppTheme.textSecondary,
+                        ),
+                        _buildMetricChip(
+                          icon: Icons.warning_amber_rounded,
+                          label: 'Проблемы',
+                          value: '$problemCount',
+                          color: problemCount > 0
+                              ? AppTheme.statusDown
+                              : AppTheme.textTertiary,
+                        ),
+                        _buildNetworkChip(
+                          'Интернет',
+                          monitor.internetAvailable,
+                        ),
+                        _buildNetworkChip('DNS', monitor.dnsAvailable),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: monitor.isCheckInProgress
+                              ? null
+                              : monitor.refreshAllHosts,
+                          icon: monitor.isCheckInProgress
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh_rounded, size: 18),
+                          label: Text(
+                            monitor.isCheckInProgress
+                                ? 'Проверяем'
+                                : 'Проверить снова',
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => _copyReport(monitor),
+                          icon: const Icon(Icons.copy_all_outlined, size: 17),
+                          label: const Text('Скопировать отчёт'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          'Последняя проверка: $lastChecked',
+                          style: const TextStyle(
+                            color: AppTheme.textTertiary,
+                            fontSize: 10,
+                          ),
+                        ),
+                        const Text(
+                          'Автопроверка каждые 30 секунд',
+                          style: TextStyle(
+                            color: AppTheme.textTertiary,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildStatCard({
+  Future<void> _copyReport(MonitorService monitor) async {
+    await Clipboard.setData(
+      ClipboardData(text: monitor.generateReport()),
+    );
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Диагностический отчёт скопирован'),
+      ),
+    );
+  }
+
+  Widget _buildMetricChip({
     required IconData icon,
     required String label,
     required String value,
     required Color color,
-    required LinearGradient gradient,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+        color: AppTheme.backgroundCardElevated,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNetworkChip(String label, bool? value) {
+    final color = value == null
+        ? AppTheme.textTertiary
+        : value
+        ? AppTheme.statusOnline
+        : AppTheme.statusDown;
+    final icon = value == null
+        ? Icons.more_horiz_rounded
+        : value
+        ? Icons.check_rounded
+        : Icons.close_rounded;
+    final stateText = value == null
+        ? 'проверка'
+        : value
+        ? 'OK'
+        : 'ошибка';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundCardElevated,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            '$label · $stateText',
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
             ),
-            child: Icon(icon, color: Colors.white, size: 22),
           ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceGroups() {
+    return SliverToBoxAdapter(
+      child: Consumer<MonitorService>(
+        builder: (context, monitor, child) {
+          if (monitor.hosts.isEmpty) {
+            return _content(
+              const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primaryCyan,
+                    strokeWidth: 2,
+                  ),
                 ),
               ),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+            );
+          }
+
+          final categories = <String>[];
+          for (final host in monitor.hosts) {
+            if (!categories.contains(host.category)) {
+              categories.add(host.category);
+            }
+          }
+
+          final width = MediaQuery.sizeOf(context).width;
+          final useColumns = width >= 900 && categories.length == 2;
+
+          final sections = categories.map((category) {
+            final hosts = monitor.hosts
+                .where((host) => host.category == category)
+                .toList();
+            return _buildCategorySection(category, hosts);
+          }).toList();
+
+          return _content(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: useColumns
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: sections[0]),
+                        const SizedBox(width: 16),
+                        Expanded(child: sections[1]),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        for (int i = 0; i < sections.length; i++) ...[
+                          sections[i],
+                          if (i != sections.length - 1)
+                            const SizedBox(height: 24),
+                        ],
+                      ],
+                    ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCategorySection(String category, List<HostStatus> hosts) {
+    final problemCount = hosts
+        .where(
+          (host) =>
+              host.state == HostState.down ||
+              host.state == HostState.degraded,
+        )
+        .length;
+    final checkingCount = hosts
+        .where((host) => host.state == HostState.checking)
+        .length;
+
+    final title = category == 'OTA'
+        ? 'Обновления автомобиля'
+        : category == 'APP'
+        ? 'Приложение Li Auto'
+        : category;
+    final subtitle = category == 'OTA'
+        ? 'OTA и сервисы прошивки'
+        : category == 'APP'
+        ? 'Авторизация и основные API'
+        : 'Сетевые сервисы';
+    final icon = category == 'OTA'
+        ? Icons.system_update_alt_rounded
+        : category == 'APP'
+        ? Icons.phone_android_rounded
+        : Icons.cloud_outlined;
+
+    String summary;
+    Color summaryColor;
+    if (checkingCount > 0) {
+      summary = 'Проверка';
+      summaryColor = AppTheme.accentBlue;
+    } else if (problemCount > 0) {
+      summary = '$problemCount проблем';
+      summaryColor = AppTheme.statusDown;
+    } else {
+      summary = 'Все работают';
+      summaryColor = AppTheme.statusOnline;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundCardElevated,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                  border: Border.all(color: AppTheme.borderSubtle),
+                ),
+                child: Icon(
+                  icon,
+                  color: AppTheme.textSecondary,
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppTheme.textTertiary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: summaryColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  summary,
+                  style: TextStyle(
+                    color: summaryColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(bool isMonitoring) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: isMonitoring
-            ? AppTheme.statusOnline.withOpacity(0.12)
-            : AppTheme.statusDown.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        border: Border.all(
-          color: isMonitoring
-              ? AppTheme.statusOnline.withOpacity(0.3)
-              : AppTheme.statusDown.withOpacity(0.3),
-          width: 1,
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Vertical bar indicator
-          Container(
-            width: 4,
-            height: 20,
-            decoration: BoxDecoration(
-              color: isMonitoring ? AppTheme.statusOnline : AppTheme.statusDown,
-              borderRadius: BorderRadius.circular(2),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      (isMonitoring
-                              ? AppTheme.statusOnline
-                              : AppTheme.statusDown)
-                          .withOpacity(0.5),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
+        for (int i = 0; i < hosts.length; i++) ...[
+          HostCard(
+            key: ValueKey(hosts[i].host),
+            host: hosts[i],
           ),
-          const SizedBox(width: 10),
-          Text(
-            isMonitoring ? 'ЖИВОЙ' : 'ПАУЗА',
-            style: TextStyle(
-              color: isMonitoring ? AppTheme.statusOnline : AppTheme.statusDown,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-            ),
-          ),
+          if (i != hosts.length - 1) const SizedBox(height: 10),
         ],
+      ],
+    );
+  }
+
+  Widget _content(Widget child) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1160),
+        child: child,
       ),
     );
   }
 
-  Widget _buildHostsList() {
-    return Selector<MonitorService, List<HostStatus>>(
-      selector: (_, monitor) => monitor.hosts,
-      shouldRebuild: (prev, next) => prev.length != next.length,
-      builder: (context, hosts, child) {
-        if (hosts.isEmpty) {
-          return const SliverFillRemaining(
-            child: Center(
-              child: CircularProgressIndicator(
-                color: AppTheme.primaryCyan,
-                strokeWidth: 2,
-              ),
-            ),
-          );
-        }
+  Color _statusColor(HostState state) {
+    switch (state) {
+      case HostState.online:
+        return AppTheme.statusOnline;
+      case HostState.down:
+        return AppTheme.statusDown;
+      case HostState.degraded:
+        return AppTheme.statusUnknown;
+      case HostState.checking:
+        return AppTheme.accentBlue;
+      case HostState.unknown:
+        return AppTheme.textTertiary;
+    }
+  }
 
-        return SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              return TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: Duration(milliseconds: 300 + (index * 50)),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Transform.translate(
-                      offset: Offset(0, 20 * (1 - value)),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: HostCard(
-                    key: ValueKey(hosts[index].host),
-                    host: hosts[index],
-                  ),
-                ),
-              );
-            }, childCount: hosts.length),
-          ),
-        );
-      },
-    );
+  IconData _statusIcon(HostState state) {
+    switch (state) {
+      case HostState.online:
+        return Icons.check_circle_outline_rounded;
+      case HostState.down:
+        return Icons.error_outline_rounded;
+      case HostState.degraded:
+        return Icons.warning_amber_rounded;
+      case HostState.checking:
+        return Icons.sync_rounded;
+      case HostState.unknown:
+        return Icons.more_horiz_rounded;
+    }
   }
 }

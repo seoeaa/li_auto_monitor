@@ -9,47 +9,104 @@ class TcpStatusIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAvailable = host.isTcpAvailable;
-    final color = isAvailable ? Colors.green : Colors.red;
+    final tcpValue = host.isDnsAvailable == true
+        ? host.isTcpAvailable
+        : null;
+
+    final steps = [
+      ('DNS', host.isDnsAvailable, host.resolvedIp),
+      ('TCP 443', tcpValue, host.isTcpAvailable ? 'Соединение установлено' : null),
+      ('TLS', host.isTlsAvailable, host.isTlsAvailable == true ? 'Защищённое соединение' : null),
+      (
+        'HTTPS',
+        host.isHttpAvailable,
+        host.httpStatusCode != null ? 'HTTP ${host.httpStatusCode}' : null,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 620 ? 4 : 2;
+        const gap = 8.0;
+        final itemWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: steps
+              .map(
+                (step) => SizedBox(
+                  width: itemWidth,
+                  child: _buildStep(step.$1, step.$2, step.$3),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildStep(String label, bool? value, String? detail) {
+    final color = value == null
+        ? AppTheme.textTertiary
+        : value
+        ? AppTheme.statusOnline
+        : AppTheme.statusDown;
+    final icon = value == null
+        ? Icons.more_horiz_rounded
+        : value
+        ? Icons.check_rounded
+        : Icons.close_rounded;
+    final state = value == null
+        ? 'Ожидание'
+        : value
+        ? 'Работает'
+        : 'Ошибка';
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: AppTheme.backgroundCardElevated,
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
+        border: Border.all(color: AppTheme.borderSubtle),
       ),
       child: Row(
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.5),
-                  blurRadius: 8,
-                  spreadRadius: 1,
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail ?? state,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: detail != null ? AppTheme.textTertiary : color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Icon(
-            isAvailable ? Icons.verified : Icons.block,
-            size: 16,
-            color: color,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            isAvailable ? 'TCP ПОРТ 443 ДОСТУПЕН' : 'TCP ПОРТ 443 ЗАБЛОКИРОВАН',
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
             ),
           ),
         ],

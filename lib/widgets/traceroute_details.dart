@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/host_status.dart';
+import '../services/monitor_service.dart';
 import '../theme/app_theme.dart';
 import 'hop_row.dart';
 import 'tcp_status_indicator.dart';
@@ -12,81 +14,150 @@ class TracerouteDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.2),
+      decoration: const BoxDecoration(
         border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
+          top: BorderSide(color: AppTheme.borderSubtle, width: 1),
         ),
       ),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Row(
-              children: [
-                ShaderMask(
-                  shaderCallback: (bounds) =>
-                      AppTheme.primaryGradient.createShader(bounds),
-                  child: const Icon(Icons.route, color: Colors.white, size: 16),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'АНАЛИЗ МАРШРУТА',
-                  style: TextStyle(
-                    color: AppTheme.primaryCyan,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const Spacer(),
-                if (host.isTracing)
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppTheme.primaryCyan.withOpacity(0.7),
-                    ),
-                  ),
-              ],
+          const Text(
+            'Проверка соединения',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
-
-          if (host.hops.isEmpty && host.isTracing)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Text(
-                'Запуск трассировки...',
-                style: TextStyle(
-                  color: Colors.white38,
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
+          const SizedBox(height: 10),
+          TcpStatusIndicator(host: host),
+          if (host.diagnosis != null && host.diagnosis!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.backgroundCardElevated,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                border: Border.all(color: AppTheme.borderSubtle),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: AppTheme.textTertiary,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      host.diagnosis!,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Маршрут до сервера',
+                      style: TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Дополнительная техническая проверка',
+                      style: TextStyle(
+                        color: AppTheme.textTertiary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            )
-          else if (host.hops.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Text(
-                'Нет данных трассировки',
-                style: TextStyle(color: Colors.white24),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: host.isTracing
+                    ? null
+                    : () => context.read<MonitorService>().traceHost(host),
+                icon: host.isTracing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.route_outlined, size: 16),
+                label: Text(host.isTracing ? 'Проверяем' : 'Проверить'),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (host.isTracing && host.hops.isEmpty)
+            const _RoutePlaceholder(text: 'Ищем сетевые узлы...')
+          else if (host.hops.isEmpty)
+            const _RoutePlaceholder(
+              text: 'Маршрут ещё не проверялся. Запустите его при проблемах со связью.',
             )
           else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.backgroundCardElevated,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                border: Border.all(color: AppTheme.borderSubtle),
+              ),
               child: Column(
                 children: host.hops.map((hop) => HopRow(hop: hop)).toList(),
               ),
             ),
-
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: TcpStatusIndicator(host: host),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+class _RoutePlaceholder extends StatelessWidget {
+  final String text;
+
+  const _RoutePlaceholder({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundCardElevated,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppTheme.textTertiary,
+          fontSize: 11,
+          height: 1.4,
+        ),
       ),
     );
   }

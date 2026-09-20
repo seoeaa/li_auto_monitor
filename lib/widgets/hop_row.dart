@@ -10,88 +10,121 @@ class HopRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSuccessful = hop.isSuccessful;
+    final color = isSuccessful
+        ? AppTheme.textSecondary
+        : AppTheme.statusDown;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
               color: isSuccessful
-                  ? AppTheme.primaryCyan.withOpacity(0.1)
-                  : Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
+                  ? AppTheme.backgroundCard
+                  : AppTheme.statusDown.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isSuccessful
+                    ? AppTheme.borderSubtle
+                    : AppTheme.statusDown.withValues(alpha: 0.2),
+              ),
             ),
             child: Center(
               child: Text(
                 '${hop.number}',
                 style: TextStyle(
-                  color: isSuccessful
-                      ? AppTheme.primaryCyan
-                      : Colors.red.withOpacity(0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  hop.ip ?? '*',
-                  style: TextStyle(
-                    color: isSuccessful
-                        ? Colors.white70
-                        : Colors.red.withOpacity(0.5),
-                    fontSize: 13,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        hop.ip ?? 'Нет ответа',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSuccessful
+                              ? AppTheme.textPrimary
+                              : AppTheme.statusDown,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      hop.time != null
+                          ? '${hop.time!.toStringAsFixed(1)} ms'
+                          : '—',
+                      style: const TextStyle(
+                        color: AppTheme.textTertiary,
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
                 ),
-                if (hop.isp != null)
-                  Text(
-                    hop.isp!,
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                    overflow: TextOverflow.ellipsis,
+                if (hop.isp != null || hop.country != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (hop.isp != null)
+                        Expanded(
+                          child: Text(
+                            hop.isp!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.textTertiary,
+                              fontSize: 9,
+                            ),
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      if (hop.country != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.backgroundCard,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: AppTheme.borderSubtle,
+                            ),
+                          ),
+                          child: Text(
+                            hop.country!,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                ],
               ],
-            ),
-          ),
-          if (hop.country != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryCyan.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                hop.country!,
-                style: const TextStyle(
-                  color: AppTheme.primaryCyan,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              hop.time != null ? '${hop.time!.toStringAsFixed(1)}ms' : '*',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 11,
-                fontFamily: 'monospace',
-              ),
             ),
           ),
         ],

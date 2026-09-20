@@ -4,9 +4,8 @@ import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
 
 class GeoIPService {
-  static const String _apiEndpoint = 'http://ip-api.com/batch';
+  static const String _apiHost = 'ipapi.co';
 
-  // In-memory cache for IP metadata
   static final Map<String, Map<String, String>> _cache = {};
 
   static Future<Map<String, Map<String, String>>> getBatchLocation(
@@ -14,7 +13,6 @@ class GeoIPService {
   ) async {
     final Map<String, Map<String, String>> results = {};
 
-    // Filter out null/empty and deduplicate
     final uniqueIps = ips
         .where((ip) => ip != null && ip.isNotEmpty)
         .cast<String>()
@@ -25,7 +23,6 @@ class GeoIPService {
 
     final List<String> ipsToFetch = [];
 
-    // Check cache first
     for (final ip in uniqueIps) {
       if (_cache.containsKey(ip)) {
         results[ip] = _cache[ip]!;
@@ -36,39 +33,62 @@ class GeoIPService {
 
     if (ipsToFetch.isEmpty) return results;
 
-    try {
-      // ip-api.com supports up to 100 IPs per batch.
-      // For simplicity, we assume we don't exceed this in one traceroute (usually max 30 hops).
-      // If needed, we could chunk ipsToFetch here.
+    const int batchSize = 4;
+    for (int i = 0; i < ipsToFetch.length; i += batchSize) {
+      final end = (i + batchSize).clamp(0, ipsToFetch.length).toInt();
+      final batch = ipsToFetch.sublist(i, end);
 
-      AppLogger.debug('Fetching GeoIP for: $ipsToFetch');
+      final fetched = await Future.wait(
+        batch.map((ip) async => (ip: ip, data: await _fetchLocation(ip))),
+      );
+
+      for (final item in fetched) {
+        if (item.data == null) continue;
+        results[item.ip] = item.data!;
+        _cache[item.ip] = item.data!;
+      }
+    }
+
+    return results;
+  }
+
+  static Future<Map<String, String>?> _fetchLocation(String ip) async {
+    try {
+      AppLogger.debug('Fetching GeoIP for: $ip');
+
       final response = await http
-          .post(
-            Uri.parse(_apiEndpoint),
-            body: jsonEncode(ipsToFetch),
-            headers: {'Content-Type': 'application/json'},
+          .get(
+            Uri.https(_apiHost, '/$ip/json/'),
+            headers: {'User-Agent': 'LiAutoMonitor/1.1'},
           )
           .timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        AppLogger.debug('GeoIP Response: ${response.body}');
-        for (int i = 0; i < data.length; i++) {
-          final item = data[i];
-          final ip = ipsToFetch[i];
-          if (item['status'] == 'success') {
-            final geoData = <String, String>{
-              'country': (item['country'] as String?) ?? '??',
-              'isp': (item['isp'] as String?) ?? 'Unknown ISP',
-            };
-            results[ip] = geoData;
-            _cache[ip] = geoData; // Update cache
-          }
-        }
+      if (response.statusCode != 200) {
+        AppLogger.warning('GeoIP HTTP ${response.statusCode} for $ip');
+        return null;
       }
+
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic> || data['error'] == true) {
+        return null;
+      }
+
+      final geoData = <String, String>{
+        'country':
+            (data['country_name'] as String?) ??
+            (data['country'] as String?) ??
+            '??',
+        'isp':
+            (data['org'] as String?) ??
+            (data['asn'] as String?) ??
+            'Unknown ISP',
+      };
+
+      AppLogger.debug('GeoIP Response for $ip: $geoData');
+      return geoData;
     } catch (e) {
-      AppLogger.error('GeoIP Batch Error', error: e);
+      AppLogger.error('GeoIP Error for $ip', error: e);
+      return null;
     }
-    return results;
   }
 }
