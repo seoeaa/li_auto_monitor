@@ -1,23 +1,60 @@
 name: CI
 
 on:
+  push:
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   flutter-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.38.5'
           channel: stable
           cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Install dependencies
         run: flutter pub get
       - name: Analyze
         run: flutter analyze
+      - name: Regression tests
+        timeout-minutes: 4
+        run: |
+          mkdir -p validation
+          set -o pipefail
+          timeout 180s flutter test --reporter expanded --timeout 30s 2>&1 | tee validation/tests.log
       - name: Build Android debug
         run: flutter build apk --debug
+      - name: Package reviewed sources
+        if: always()
+        run: |
+          mkdir -p validation
+          git rev-parse HEAD > validation/commit.txt
+          git archive --format=zip --prefix=li_auto_monitor/ --output=validation/li-auto-monitor-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: LiAutoMonitor-debug
+          retention-days: 7
+          path: |
+            validation/
+            build/app/outputs/flutter-apk/app-debug.apk
