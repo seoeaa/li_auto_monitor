@@ -123,8 +123,14 @@ class _HistoryChartWidgetState extends State<HistoryChartWidget> {
       );
     }
 
-    final onlineCount = history.where((e) => e.isOnline).length;
-    final uptime = (onlineCount / history.length * 100).toStringAsFixed(1);
+    final now = DateTime.now();
+    final startTime = now.subtract(Duration(days: _selectedDays));
+    final uptimeValue = HistoryService.calculateUptime(
+      widget.host.host,
+      startTime,
+      now,
+    );
+    final uptime = uptimeValue?.toStringAsFixed(1) ?? '—';
 
     return Row(
       children: [
