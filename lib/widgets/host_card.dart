@@ -104,7 +104,7 @@ class _HostCardState extends State<HostCard>
             borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             border: Border.all(
               color: _statusChanged
-                  ? statusColor.withOpacity(0.55)
+                  ? statusColor.withValues(alpha: 0.55)
                   : AppTheme.borderSubtle,
             ),
           ),
@@ -142,7 +142,7 @@ class _HostCardState extends State<HostCard>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.12),
+              color: statusColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             ),
             child: Icon(
@@ -279,7 +279,7 @@ class _HostCardState extends State<HostCard>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(value == null ? 0.06 : 0.09),
+        color: color.withValues(alpha: value == null ? 0.06 : 0.09),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -311,7 +311,7 @@ class _HostCardState extends State<HostCard>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
