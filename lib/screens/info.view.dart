@@ -136,7 +136,7 @@ class InfoView extends StatelessWidget {
             ),
           ),
           child: const Text(
-            'Версия 1.0.0',
+            'Версия 1.1.0',
             style: TextStyle(
               color: AppTheme.primaryCyan,
               fontSize: 13,
@@ -201,7 +201,7 @@ class InfoView extends StatelessWidget {
           const SizedBox(height: 12),
           _buildFeatureItem(
             icon: Icons.security,
-            text: 'Обход блокировок (TCP SYN 443)',
+            text: 'Проверка DNS / TCP / TLS / HTTPS',
             color: AppTheme.accentBlue,
           ),
         ],
