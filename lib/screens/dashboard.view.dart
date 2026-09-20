@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../models/host_status.dart';
@@ -64,6 +65,7 @@ class _DashboardViewState extends State<DashboardView>
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   _buildAppBar(),
+                  _buildDiagnosisSection(),
                   _buildStatsSection(),
                   _buildHostsList(),
                 ],
@@ -107,7 +109,7 @@ class _DashboardViewState extends State<DashboardView>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Мониторинг сервисов',
+                      'Диагностика сервисов Li Auto',
                       style: const TextStyle(
                         color: AppTheme.textSecondary,
                         fontSize: 14,
@@ -230,6 +232,171 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
+  Widget _buildDiagnosisSection() {
+    return SliverToBoxAdapter(
+      child: Consumer<MonitorService>(
+        builder: (context, monitor, child) {
+          final state = monitor.overallState;
+          final color = state == HostState.online
+              ? AppTheme.statusOnline
+              : state == HostState.down
+              ? AppTheme.statusDown
+              : state == HostState.checking
+              ? AppTheme.accentBlue
+              : AppTheme.statusUnknown;
+
+          final icon = state == HostState.online
+              ? Icons.check_circle_outline
+              : state == HostState.down
+              ? Icons.error_outline
+              : state == HostState.checking
+              ? Icons.radar
+              : Icons.warning_amber_rounded;
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppTheme.cardGradient,
+                borderRadius: BorderRadius.circular(AppTheme.radiusXLarge),
+                border: Border.all(color: color.withOpacity(0.35)),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMedium,
+                          ),
+                        ),
+                        child: Icon(icon, color: color, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              monitor.diagnosisTitle,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              monitor.diagnosisDetails,
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildNetworkChip(
+                        'Интернет',
+                        monitor.internetAvailable,
+                      ),
+                      _buildNetworkChip('DNS', monitor.dnsAvailable),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: monitor.generateReport()),
+                        );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Диагностический отчёт скопирован',
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_all_outlined, size: 18),
+                      label: const Text('Копировать диагностический отчёт'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNetworkChip(String label, bool? value) {
+    final color = value == null
+        ? AppTheme.statusUnknown
+        : value
+        ? AppTheme.statusOnline
+        : AppTheme.statusDown;
+    final icon = value == null
+        ? Icons.more_horiz
+        : value
+        ? Icons.check_circle_outline
+        : Icons.error_outline;
+    final stateText = value == null
+        ? 'проверка'
+        : value
+        ? 'OK'
+        : 'ошибка';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            '$label · $stateText',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatsSection() {
     return SliverToBoxAdapter(
       child:
@@ -242,7 +409,11 @@ class _DashboardViewState extends State<DashboardView>
                   .where((h) => h.state == HostState.online)
                   .length;
               final downCount = monitor.hosts
-                  .where((h) => h.state == HostState.down)
+                  .where(
+                    (h) =>
+                        h.state == HostState.down ||
+                        h.state == HostState.degraded,
+                  )
                   .length;
               return (
                 online: onlineCount,
