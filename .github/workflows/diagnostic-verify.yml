@@ -44,7 +44,11 @@ jobs:
       - name: Analyze
         run: flutter analyze
       - name: Regression tests
-        run: flutter test --reporter expanded
+        timeout-minutes: 4
+        run: |
+          mkdir -p validation
+          set -o pipefail
+          timeout 180s flutter test --reporter expanded --timeout 30s 2>&1 | tee validation/tests.log
       - name: Android build
         run: flutter build apk --debug
       - name: Collect sources
