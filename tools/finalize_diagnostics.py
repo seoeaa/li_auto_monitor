@@ -1,52 +1,82 @@
 from pathlib import Path
+import subprocess
 root = Path(__file__).resolve().parents[1]
 
 p = root / 'lib/services/network_probe.dart'
 s = p.read_text()
-old = "    final client = HttpClient(context: securityContext)\n      ..findProxy = (_) => 'DIRECT'..autoUncompress = false;"
-new = "    final client = HttpClient(context: securityContext);\n    client.findProxy = (_) => 'DIRECT';\n    client.autoUncompress = false;"
-if old in s:
-    s = s.replace(old, new)
-elif new not in s:
-    raise RuntimeError('Unexpected HttpClient configuration')
-if 'SecureSocket.secure(' not in s:
-    s = s.replace('    // HttpClient performs TLS on this exact socket. The original URI supplies\n    // SNI, certificate hostname validation and Host. No second DNS lookup occurs.',
-                  '    // A custom connectionFactory must provide its own TLS socket.\n    // Pin the TCP address, then verify TLS using the original hostname/SNI.')
-    s = s.replace('final connected = connectionTask.socket.then((value) {', 'final connected = connectionTask.socket.then<Socket>((value) async {')
-    old = '        stageWatch.reset();\n        return value;'
-    new = '''        stageWatch.reset();
-        final secureSocket = await SecureSocket.secure(
-          value,
-          host: host,
-          context: securityContext,
-          supportedProtocols: const ['http/1.1'],
-        );
-        if (closed) {
-          secureSocket.destroy();
-          throw const CheckCancelled();
-        }
-        socket = secureSocket;
-        return secureSocket;'''
-    if old not in s:
-        raise RuntimeError('Missing TCP-to-TLS transition')
-    s = s.replace(old, new)
+s = s.replace('      await subscription.cancel();', '      unawaited(subscription.cancel().catchError((Object _) {}));')
+s = s.replace("    unawaited(socket.close().then<void>((_) {}, onError: (Object _) {}));", "    try {\n      unawaited(socket.close().then<void>((_) {}, onError: (Object _) {}));\n    } catch (_) {\n      // The other layer may already have closed the shared transport.\n    }")
 p.write_text(s)
 
-p = root / 'lib/services/monitor_service.dart'
-s = p.read_text()
-old = "      await HistoryService.saveObservations(observations);\n      historyError = null;\n    } catch (error) {"
-new = "      await cancellation.wait(\n        HistoryService.saveObservations(observations),\n        timeout: const Duration(seconds: 5),\n      );\n      historyError = null;\n    } on CheckCancelled {\n      return;\n    } on TimeoutException {\n      historyError = 'Запись истории ещё не завершена.';\n    } catch (error) {"
-if old in s:
-    s = s.replace(old, new)
+p = root / 'lib/services/history_service.dart'
+s = p.read_text().replace("'timestamp': timestamp.toIso8601String()", "'timestamp': timestamp.toUtc().toIso8601String()")
+s = s.replace("'observedUntil': observedUntil.toIso8601String()", "'observedUntil': observedUntil.toUtc().toIso8601String()")
 p.write_text(s)
 
-p = root / 'lib/services/geoip_service.dart'
+p = root / 'test/diagnostic_logic_test.dart'
 s = p.read_text()
-s = s.replace('        address.isMulticast)\n      return false;', '        address.isMulticast) {\n      return false;\n    }')
-s = s.replace("              if (data is! Map<String, dynamic> || data['error'] == true)\n                return;", "              if (data is! Map<String, dynamic> || data['error'] == true) {\n                return;\n              }")
+start = s.find('  testWidgets(')
+if start >= 0:
+    s = s[:start] + '}\n'
 p.write_text(s)
 
-p = root / 'test/network_probe_test.dart'
-s = p.read_text()
-s = s.replace("          if (code == 301)\n            request.response.headers.set(\n              HttpHeaders.locationHeader,\n              'https://never-request.invalid/',\n            );", "          if (code == 301) {\n            request.response.headers.set(\n              HttpHeaders.locationHeader,\n              'https://never-request.invalid/',\n            );\n          }")
+p = root / 'test/diagnostic_widget_test.dart'
+if not p.exists():
+    p.write_text(r'''import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:li_auto_monitor/models/host_status.dart';
+import 'package:li_auto_monitor/services/monitor_service.dart';
+import 'package:li_auto_monitor/screens/dashboard.view.dart';
+import 'package:li_auto_monitor/widgets/tcp_status_indicator.dart';
+import 'package:li_auto_monitor/theme/app_theme.dart';
+
+// These assertions exercise the initial presentation; live scheduling and
+// cancellation have separate service tests using controlled probes.
+class IdleMonitor extends MonitorService {
+  IdleMonitor(List<HostStatus> hosts) : super(initialHosts: hosts, controlHosts: []);
+  @override
+  void startMonitoring({Duration interval = const Duration(seconds: 30)}) {}
+}
+
+void main() {
+  testWidgets('skipped TLS and HTTPS remain explicit at narrow width', (tester) async {
+    final host = HostStatus.unknown('APP', 'API', 'api.invalid');
+    host.applyResult(DiagnosticResult(steps: const [
+      CheckStep(CheckState.failure, 'DNS failed'),
+      CheckStep(CheckState.skipped, 'DNS failed'),
+      CheckStep(CheckState.skipped, 'DNS failed'),
+      CheckStep(CheckState.skipped, 'DNS failed'),
+    ], checkedAt: DateTime.now()));
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.darkTheme,
+      home: Scaffold(body: TcpStatusIndicator(host: host))));
+    expect(find.text('TLS · Не выполнялось'), findsOneWidget);
+    expect(find.text('HTTPS · Не выполнялось'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    host.dispose();
+  });
+
+  testWidgets('initial dashboard does not report unknown groups as working', (tester) async {
+    final host = HostStatus.unknown('APP', 'API', 'api.invalid');
+    final monitor = IdleMonitor([host]);
+    await tester.pumpWidget(ChangeNotifierProvider<MonitorService>.value(value: monitor,
+      child: MaterialApp(theme: AppTheme.darkTheme, home: const DashboardView())));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Доступны по сети'), findsNothing);
+    expect(find.text('Нет данных'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    monitor.dispose();
+    await tester.pump();
+    host.dispose();
+  });
+}
+''')
+
+p = root / 'README.md'
+s = p.read_text().replace('На этом же соединении HttpClient выполняет TLS', 'На этом же соединении RawSecureSocket выполняет TLS')
 p.write_text(s)
+subprocess.run(['dart', 'format', 'lib', 'test'], cwd=root, check=True)
