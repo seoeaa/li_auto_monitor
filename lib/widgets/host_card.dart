@@ -164,7 +164,9 @@ class _HostCardState extends State<HostCard>
                   children: [
                     Flexible(
                       child: Text(
-                        widget.host.name,
+                        widget.host.isOptional
+                            ? '${widget.host.name} · доп.'
+                            : widget.host.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -212,7 +214,7 @@ class _HostCardState extends State<HostCard>
             children: [
               if (widget.host.rtt != null)
                 Text(
-                  '${widget.host.rtt!.toStringAsFixed(0)} ms',
+                  '${widget.host.rtt!.toStringAsFixed(0)} мс · TCP',
                   style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 13,
@@ -254,59 +256,59 @@ class _HostCardState extends State<HostCard>
   }
 
   Widget _buildHealthStrip() {
-    final tcpValue = widget.host.isDnsAvailable == true
-        ? widget.host.isTcpAvailable
-        : null;
-
+    final steps = widget.host.checkSteps;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       child: Wrap(
         spacing: 6,
         runSpacing: 6,
         children: [
-          _buildHealthStep('DNS', widget.host.isDnsAvailable),
-          _buildHealthStep('TCP', tcpValue),
-          _buildHealthStep('TLS', widget.host.isTlsAvailable),
-          _buildHealthStep('HTTPS', widget.host.isHttpAvailable),
+          _buildHealthStep('DNS', steps[0]),
+          _buildHealthStep('TCP', steps[1]),
+          _buildHealthStep('TLS', steps[2]),
+          _buildHealthStep('HTTPS', steps[3]),
         ],
       ),
     );
   }
 
-  Widget _buildHealthStep(String label, bool? value) {
-    final color = value == null
-        ? AppTheme.textTertiary
-        : value
-        ? AppTheme.statusOnline
-        : AppTheme.statusDown;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: value == null ? 0.06 : 0.09),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
+  Widget _buildHealthStep(String label, CheckStep value) {
+    final color = switch (value.state) {
+      CheckState.success => AppTheme.statusOnline,
+      CheckState.warning => AppTheme.statusUnknown,
+      CheckState.failure => AppTheme.statusDown,
+      CheckState.checking => AppTheme.accentBlue,
+      _ => AppTheme.textSecondary,
+    };
+    final icon = switch (value.state) {
+      CheckState.success => Icons.check_rounded,
+      CheckState.warning => Icons.info_outline,
+      CheckState.failure => Icons.close_rounded,
+      _ => Icons.remove_rounded,
+    };
+    return Tooltip(
+      message: '${value.label}: ${value.detail}',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: value == null ? AppTheme.textTertiary : color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -319,7 +321,9 @@ class _HostCardState extends State<HostCard>
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        _getStatusLabel(widget.host.state),
+        widget.host.isChecking
+            ? 'ПРОВЕРКА'
+            : _getStatusLabel(widget.host.state),
         style: TextStyle(
           color: statusColor,
           fontSize: 9,
@@ -332,11 +336,11 @@ class _HostCardState extends State<HostCard>
   String _getStatusLabel(HostState state) {
     switch (state) {
       case HostState.online:
-        return 'РАБОТАЕТ';
+        return 'ДОСТУПЕН';
       case HostState.down:
         return 'ОШИБКА';
       case HostState.degraded:
-        return 'НЕСТАБИЛЬНО';
+        return 'ВНИМАНИЕ';
       case HostState.checking:
         return 'ПРОВЕРКА';
       case HostState.unknown:

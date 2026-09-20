@@ -13,11 +13,13 @@ class HostsConfig {
     {
       'category': 'OTA',
       'name': 'OTA Test',
+      'optional': 'true',
       'host': 'api-hmi-test.chehejia.com',
     },
     {
       'category': 'OTA',
       'name': 'OTA OnTest',
+      'optional': 'true',
       'host': 'iot-api-hmi-ontest-b.chehejia.com',
     },
     {'category': 'APP', 'name': 'App Diagnosis', 'host': 'api-app.lixiang.com'},

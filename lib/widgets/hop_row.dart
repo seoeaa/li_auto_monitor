@@ -10,9 +10,7 @@ class HopRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSuccessful = hop.isSuccessful;
-    final color = isSuccessful
-        ? AppTheme.textSecondary
-        : AppTheme.statusDown;
+    final color = isSuccessful ? AppTheme.textSecondary : AppTheme.textTertiary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -25,12 +23,12 @@ class HopRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: isSuccessful
                   ? AppTheme.backgroundCard
-                  : AppTheme.statusDown.withValues(alpha: 0.08),
+                  : AppTheme.textTertiary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isSuccessful
                     ? AppTheme.borderSubtle
-                    : AppTheme.statusDown.withValues(alpha: 0.2),
+                    : AppTheme.textTertiary.withValues(alpha: 0.2),
               ),
             ),
             child: Center(
@@ -59,7 +57,7 @@ class HopRow extends StatelessWidget {
                         style: TextStyle(
                           color: isSuccessful
                               ? AppTheme.textPrimary
-                              : AppTheme.statusDown,
+                              : AppTheme.textTertiary,
                           fontSize: 11,
                           fontFamily: 'monospace',
                           fontWeight: FontWeight.w600,
@@ -107,9 +105,7 @@ class HopRow extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppTheme.backgroundCard,
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: AppTheme.borderSubtle,
-                            ),
+                            border: Border.all(color: AppTheme.borderSubtle),
                           ),
                           child: Text(
                             hop.country!,

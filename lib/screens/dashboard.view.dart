@@ -17,7 +17,8 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  bool _resumeMonitoring = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -26,6 +27,7 @@ class _DashboardViewState extends State<DashboardView>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 360),
@@ -36,12 +38,14 @@ class _DashboardViewState extends State<DashboardView>
     _animationController.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<MonitorService>(context, listen: false).startMonitoring();
+      if (mounted)
+        Provider.of<MonitorService>(context, listen: false).startMonitoring();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     super.dispose();
   }
@@ -179,6 +183,21 @@ class _DashboardViewState extends State<DashboardView>
     );
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    final monitor = context.read<MonitorService>();
+    if (state == AppLifecycleState.resumed) {
+      if (_resumeMonitoring) monitor.startMonitoring();
+      _resumeMonitoring = false;
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _resumeMonitoring = _resumeMonitoring || monitor.isMonitoring;
+      monitor.stopMonitoring();
+    }
+  }
+
   void _openInfo() {
     Navigator.push(
       context,
@@ -293,17 +312,17 @@ class _DashboardViewState extends State<DashboardView>
         builder: (context, monitor, child) {
           final state = monitor.overallState;
           final color = _statusColor(state);
-          final onlineCount = monitor.hosts
+          final onlineCount = monitor.primaryHosts
               .where((host) => host.state == HostState.online)
               .length;
-          final problemCount = monitor.hosts
+          final problemCount = monitor.primaryHosts
               .where(
                 (host) =>
                     host.state == HostState.down ||
                     host.state == HostState.degraded,
               )
               .length;
-          final total = monitor.hosts.length;
+          final total = monitor.primaryHosts.length;
           final lastChecked = monitor.lastCycleCompleted != null
               ? _timeFormat.format(monitor.lastCycleCompleted!)
               : 'ещё не завершена';
@@ -440,6 +459,19 @@ class _DashboardViewState extends State<DashboardView>
                           icon: const Icon(Icons.copy_all_outlined, size: 17),
                           label: const Text('Скопировать отчёт'),
                         ),
+                        TextButton.icon(
+                          onPressed: monitor.isMonitoring
+                              ? monitor.stopMonitoring
+                              : () => monitor.startMonitoring(),
+                          icon: Icon(
+                            monitor.isMonitoring
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                          ),
+                          label: Text(
+                            monitor.isMonitoring ? 'Пауза' : 'Продолжить',
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -454,9 +486,11 @@ class _DashboardViewState extends State<DashboardView>
                             fontSize: 10,
                           ),
                         ),
-                        const Text(
-                          'Автопроверка каждые 30 секунд',
-                          style: TextStyle(
+                        Text(
+                          monitor.isMonitoring
+                              ? 'Автопроверка через 30 с после завершения'
+                              : 'Автопроверка остановлена',
+                          style: const TextStyle(
                             color: AppTheme.textTertiary,
                             fontSize: 10,
                           ),
@@ -474,15 +508,11 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   Future<void> _copyReport(MonitorService monitor) async {
-    await Clipboard.setData(
-      ClipboardData(text: monitor.generateReport()),
-    );
+    await Clipboard.setData(ClipboardData(text: monitor.generateReport()));
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Диагностический отчёт скопирован'),
-      ),
+      const SnackBar(content: Text('Диагностический отчёт скопирован')),
     );
   }
 
@@ -538,7 +568,7 @@ class _DashboardViewState extends State<DashboardView>
         ? Icons.check_rounded
         : Icons.close_rounded;
     final stateText = value == null
-        ? 'проверка'
+        ? 'не подтверждено'
         : value
         ? 'OK'
         : 'ошибка';
@@ -632,15 +662,20 @@ class _DashboardViewState extends State<DashboardView>
   }
 
   Widget _buildCategorySection(String category, List<HostStatus> hosts) {
-    final problemCount = hosts
+    final mainHosts = hosts.where((host) => !host.isOptional).toList();
+    final problemCount = mainHosts
         .where(
           (host) =>
-              host.state == HostState.down ||
-              host.state == HostState.degraded,
+              host.state == HostState.down || host.state == HostState.degraded,
         )
         .length;
-    final checkingCount = hosts
-        .where((host) => host.state == HostState.checking)
+    final checkingCount = mainHosts.where((host) => host.isChecking).length;
+    final unknownCount = mainHosts
+        .where(
+          (host) =>
+              host.state == HostState.unknown ||
+              host.state == HostState.checking,
+        )
         .length;
 
     final title = category == 'OTA'
@@ -665,10 +700,13 @@ class _DashboardViewState extends State<DashboardView>
       summary = 'Проверка';
       summaryColor = AppTheme.accentBlue;
     } else if (problemCount > 0) {
-      summary = '$problemCount проблем';
+      summary = '$problemCount замечаний';
       summaryColor = AppTheme.statusDown;
+    } else if (unknownCount > 0 || mainHosts.isEmpty) {
+      summary = 'Нет данных';
+      summaryColor = AppTheme.textSecondary;
     } else {
-      summary = 'Все работают';
+      summary = 'Доступны по сети';
       summaryColor = AppTheme.statusOnline;
     }
 
@@ -687,11 +725,7 @@ class _DashboardViewState extends State<DashboardView>
                   borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                   border: Border.all(color: AppTheme.borderSubtle),
                 ),
-                child: Icon(
-                  icon,
-                  color: AppTheme.textSecondary,
-                  size: 17,
-                ),
+                child: Icon(icon, color: AppTheme.textSecondary, size: 17),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -718,10 +752,7 @@ class _DashboardViewState extends State<DashboardView>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
                   color: summaryColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(999),
@@ -739,10 +770,7 @@ class _DashboardViewState extends State<DashboardView>
           ),
         ),
         for (int i = 0; i < hosts.length; i++) ...[
-          HostCard(
-            key: ValueKey(hosts[i].host),
-            host: hosts[i],
-          ),
+          HostCard(key: ValueKey(hosts[i].host), host: hosts[i]),
           if (i != hosts.length - 1) const SizedBox(height: 10),
         ],
       ],

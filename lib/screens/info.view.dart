@@ -11,9 +11,7 @@ class InfoView extends StatelessWidget {
     if (opened || !context.mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Не удалось открыть Telegram'),
-      ),
+      const SnackBar(content: Text('Не удалось открыть Telegram')),
     );
   }
 
@@ -100,10 +98,7 @@ class InfoView extends StatelessWidget {
                 SizedBox(height: 5),
                 Text(
                   'Диагностика сети и сервисов Li Auto',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 ),
                 SizedBox(height: 8),
                 _VersionBadge(),
@@ -127,8 +122,9 @@ class InfoView extends StatelessWidget {
           Text(
             'Li Auto Monitor поэтапно проверяет доступность сервисов автомобиля: '
             'DNS, TCP 443, TLS и HTTPS. Если связь работает нестабильно, можно '
-            'отдельно запустить анализ маршрута и посмотреть, на каком сетевом '
-            'участке начинаются проблемы.',
+            'отдельно запустить ICMP-трассировку. Отсутствие ответа промежуточного '
+            'узла не доказывает блокировку. Проверка выполняется с текущего '
+            'устройства; авторизация и функции автомобиля не проверяются.',
             style: TextStyle(
               color: AppTheme.textSecondary,
               height: 1.55,
@@ -304,10 +300,7 @@ class InfoView extends StatelessWidget {
     return const Center(
       child: Text(
         'Li Auto Monitor · 2026',
-        style: TextStyle(
-          color: AppTheme.textTertiary,
-          fontSize: 10,
-        ),
+        style: TextStyle(color: AppTheme.textTertiary, fontSize: 10),
       ),
     );
   }
@@ -367,11 +360,7 @@ class _TelegramIcon extends StatelessWidget {
         color: const Color(0xFF2AABEE).withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
       ),
-      child: const Icon(
-        Icons.send_rounded,
-        color: Color(0xFF2AABEE),
-        size: 18,
-      ),
+      child: const Icon(Icons.send_rounded, color: Color(0xFF2AABEE), size: 18),
     );
   }
 }

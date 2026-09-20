@@ -19,7 +19,13 @@ class HistoryEntry {
     HostState? state,
     DateTime? observedUntil,
     this.sessionId,
-  }) : state = state ?? (isOnline == null ? HostState.unknown : isOnline ? HostState.online : HostState.down),
+  }) : state =
+           state ??
+           (isOnline == null
+               ? HostState.unknown
+               : isOnline
+               ? HostState.online
+               : HostState.down),
        observedUntil = observedUntil ?? timestamp;
 
   bool get isOnline => state == HostState.online;
@@ -43,8 +49,12 @@ class HistoryEntry {
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) {
     final timestamp = DateTime.parse(json['timestamp'] as String);
-    final state = HostState.values.where((value) => value.name == json['state']).firstOrNull;
-    final end = json['observedUntil'] is String ? DateTime.parse(json['observedUntil'] as String) : timestamp;
+    final state = HostState.values
+        .where((value) => value.name == json['state'])
+        .firstOrNull;
+    final end = json['observedUntil'] is String
+        ? DateTime.parse(json['observedUntil'] as String)
+        : timestamp;
     return HistoryEntry(
       host: json['host'] as String,
       timestamp: timestamp,
@@ -64,10 +74,14 @@ class HistoryStatistics {
   final Duration period;
   const HistoryStatistics(this.online, this.degraded, this.down, this.period);
   Duration get observed => online + degraded + down;
-  double get coveragePercent => period.inMilliseconds <= 0 ? 0 :
-      (100 * observed.inMilliseconds / period.inMilliseconds).clamp(0, 100).toDouble();
-  double? get uptimePercent => observed.inMilliseconds == 0 ? null :
-      100 * (online + degraded).inMilliseconds / observed.inMilliseconds;
+  double get coveragePercent => period.inMilliseconds <= 0
+      ? 0
+      : (100 * observed.inMilliseconds / period.inMilliseconds)
+            .clamp(0, 100)
+            .toDouble();
+  double? get uptimePercent => observed.inMilliseconds == 0
+      ? null
+      : 100 * (online + degraded).inMilliseconds / observed.inMilliseconds;
 }
 
 class HistoryService {
@@ -108,9 +122,17 @@ class HistoryService {
     for (final source in [file, backup]) {
       if (!await source.exists()) continue;
       try {
-        final decoded = jsonDecode(await source.readAsString()) as Map<String, dynamic>;
-        if (decoded['version'] != 2) throw const FormatException('Unsupported history version');
-        loaded = (decoded['entries'] as List).map((entry) => HistoryEntry.fromJson(Map<String, dynamic>.from(entry as Map))).toList();
+        final decoded =
+            jsonDecode(await source.readAsString()) as Map<String, dynamic>;
+        if (decoded['version'] != 2)
+          throw const FormatException('Unsupported history version');
+        loaded = (decoded['entries'] as List)
+            .map(
+              (entry) => HistoryEntry.fromJson(
+                Map<String, dynamic>.from(entry as Map),
+              ),
+            )
+            .toList();
         _loadedBackup = source.path == backup.path;
         break;
       } catch (error) {
@@ -120,7 +142,12 @@ class HistoryService {
     if (loaded == null && failure != null) throw failure;
     if (loaded == null && await legacy.exists()) {
       final decoded = jsonDecode(await legacy.readAsString()) as List;
-      loaded = decoded.map((entry) => HistoryEntry.fromJson(Map<String, dynamic>.from(entry as Map))).toList();
+      loaded = decoded
+          .map(
+            (entry) =>
+                HistoryEntry.fromJson(Map<String, dynamic>.from(entry as Map)),
+          )
+          .toList();
     }
     _history
       ..clear()
@@ -140,23 +167,39 @@ class HistoryService {
 
   // Compatibility methods intentionally create isolated observations; they do
   // not claim continuous monitoring without an explicit session identifier.
-  static Future<void> saveEntry(String host, bool isOnline) => saveSnapshot({host: isOnline});
-  static Future<void> saveSnapshot(Map<String, bool> states) => saveObservations([
-    for (final entry in states.entries)
-      HistoryEntry(host: entry.key, timestamp: _now(), isOnline: entry.value),
-  ]);
+  static Future<void> saveEntry(String host, bool isOnline) =>
+      saveSnapshot({host: isOnline});
+  static Future<void> saveSnapshot(Map<String, bool> states) =>
+      saveObservations([
+        for (final entry in states.entries)
+          HistoryEntry(
+            host: entry.key,
+            timestamp: _now(),
+            isOnline: entry.value,
+          ),
+      ]);
 
-  static Future<void> saveObservations(List<HistoryEntry> entries) => _queue(() async {
+  static Future<void> saveObservations(
+    List<HistoryEntry> entries,
+  ) => _queue(() async {
     await init();
     var forceWrite = false;
     for (final entry in entries) {
-      if (entry.state == HostState.checking || entry.state == HostState.unknown) continue;
-      final lastIndex = _history.lastIndexWhere((value) => value.host == entry.host);
+      if (entry.state == HostState.checking || entry.state == HostState.unknown)
+        continue;
+      final lastIndex = _history.lastIndexWhere(
+        (value) => value.host == entry.host,
+      );
       final last = lastIndex < 0 ? null : _history[lastIndex];
-      final gap = last == null ? null : entry.timestamp.difference(last.observedUntil);
-      final continuous = last != null &&
-          entry.sessionId != null && last.sessionId == entry.sessionId &&
-          gap! >= Duration.zero && gap <= maxObservationGap;
+      final gap = last == null
+          ? null
+          : entry.timestamp.difference(last.observedUntil);
+      final continuous =
+          last != null &&
+          entry.sessionId != null &&
+          last.sessionId == entry.sessionId &&
+          gap! >= Duration.zero &&
+          gap <= maxObservationGap;
       if (continuous) {
         // The preceding sampled state is carried only to the next confirmed
         // measurement, never to DateTime.now() or through a stopped session.
@@ -172,7 +215,10 @@ class HistoryService {
       _dirty = true;
     }
     _cleanupOldData();
-    if (_dirty && (forceWrite || _lastWrite == null || _now().difference(_lastWrite!) >= _minimumSampleInterval)) {
+    if (_dirty &&
+        (forceWrite ||
+            _lastWrite == null ||
+            _now().difference(_lastWrite!) >= _minimumSampleInterval)) {
       await _saveToFile();
     }
     changes.value++;
@@ -182,46 +228,72 @@ class HistoryService {
       _history.where((entry) => entry.host == host).toList()
         ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-  static List<HistoryEntry> segmentsFor(String host, DateTime startTime, DateTime endTime) {
+  static List<HistoryEntry> segmentsFor(
+    String host,
+    DateTime startTime,
+    DateTime endTime,
+  ) {
     if (!endTime.isAfter(startTime)) return [];
     final segments = <HistoryEntry>[];
     var cursor = startTime;
     for (final entry in getHistory(host)) {
       final start = entry.timestamp.isAfter(cursor) ? entry.timestamp : cursor;
-      final end = entry.observedUntil.isBefore(endTime) ? entry.observedUntil : endTime;
+      final end = entry.observedUntil.isBefore(endTime)
+          ? entry.observedUntil
+          : endTime;
       if (!end.isAfter(start)) continue;
-      if (entry.state == HostState.unknown || entry.state == HostState.checking) continue;
-      segments.add(HistoryEntry(
-        host: entry.host,
-        timestamp: start,
-        observedUntil: end,
-        state: entry.state,
-        sessionId: entry.sessionId,
-      ));
+      if (entry.state == HostState.unknown || entry.state == HostState.checking)
+        continue;
+      segments.add(
+        HistoryEntry(
+          host: entry.host,
+          timestamp: start,
+          observedUntil: end,
+          state: entry.state,
+          sessionId: entry.sessionId,
+        ),
+      );
       cursor = end;
     }
     return segments;
   }
 
-  static HistoryStatistics statistics(String host, DateTime startTime, DateTime endTime) {
+  static HistoryStatistics statistics(
+    String host,
+    DateTime startTime,
+    DateTime endTime,
+  ) {
     var online = Duration.zero;
     var degraded = Duration.zero;
     var down = Duration.zero;
     for (final entry in segmentsFor(host, startTime, endTime)) {
       final duration = entry.observedUntil.difference(entry.timestamp);
       switch (entry.state) {
-        case HostState.online: online += duration;
-        case HostState.degraded: degraded += duration;
-        case HostState.down: down += duration;
-        case HostState.unknown || HostState.checking: break;
+        case HostState.online:
+          online += duration;
+        case HostState.degraded:
+          degraded += duration;
+        case HostState.down:
+          down += duration;
+        case HostState.unknown || HostState.checking:
+          break;
       }
     }
-    return HistoryStatistics(online, degraded, down,
-      endTime.isAfter(startTime) ? endTime.difference(startTime) : Duration.zero);
+    return HistoryStatistics(
+      online,
+      degraded,
+      down,
+      endTime.isAfter(startTime)
+          ? endTime.difference(startTime)
+          : Duration.zero,
+    );
   }
 
-  static double? calculateUptime(String host, DateTime startTime, DateTime endTime) =>
-      statistics(host, startTime, endTime).uptimePercent;
+  static double? calculateUptime(
+    String host,
+    DateTime startTime,
+    DateTime endTime,
+  ) => statistics(host, startTime, endTime).uptimePercent;
 
   static void _cleanupOldData() {
     final cutoff = _now().subtract(_retention);
@@ -238,10 +310,13 @@ class HistoryService {
     final file = await _getFile();
     final temp = File('${file.path}.tmp');
     final backup = File('${file.path}.bak');
-    await temp.writeAsString(jsonEncode({
-      'version': 2,
-      'entries': _history.map((entry) => entry.toJson()).toList(),
-    }), flush: true);
+    await temp.writeAsString(
+      jsonEncode({
+        'version': 2,
+        'entries': _history.map((entry) => entry.toJson()).toList(),
+      }),
+      flush: true,
+    );
     // Serialized writes plus temp/backup make interrupted replacement recoverable
     // on Windows as well as POSIX. Never rotate a corrupt primary over a good backup.
     if (_loadedBackup) {
@@ -272,7 +347,10 @@ class HistoryService {
   });
 
   @visibleForTesting
-  static Future<void> resetForTesting({Directory? directory, DateTime Function()? now}) async {
+  static Future<void> resetForTesting({
+    Directory? directory,
+    DateTime Function()? now,
+  }) async {
     await _pending;
     _directory = directory;
     _now = now ?? DateTime.now;

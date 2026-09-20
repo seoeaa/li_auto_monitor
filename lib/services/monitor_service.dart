@@ -37,26 +37,34 @@ class MonitorService extends ChangeNotifier {
   }) : _probe = probe ?? NetworkProbe(),
        _controlHosts = List.unmodifiable(controlHosts),
        _ownsHosts = initialHosts == null {
-    _hosts = initialHosts ?? HostsConfig.defaultHosts.map((h) => HostStatus(
-      category: h['category']!,
-      name: h['name']!,
-      host: h['host']!,
-      isOptional: h['optional'] == 'true',
-    )).toList();
+    _hosts =
+        initialHosts ??
+        HostsConfig.defaultHosts
+            .map(
+              (h) => HostStatus(
+                category: h['category']!,
+                name: h['name']!,
+                host: h['host']!,
+                isOptional: h['optional'] == 'true',
+              ),
+            )
+            .toList();
     for (final host in _hosts) {
       host.addListener(_notify);
     }
   }
 
   List<HostStatus> get hosts => List.unmodifiable(_hosts);
-  List<HostStatus> get primaryHosts => _hosts.where((host) => !host.isOptional).toList();
+  List<HostStatus> get primaryHosts =>
+      _hosts.where((host) => !host.isOptional).toList();
   bool get isMonitoring => _isMonitoring;
   bool get isCheckInProgress => _isCheckInProgress;
   bool? get internetAvailable => _internetAvailable;
   bool? get dnsAvailable => _dnsAvailable;
   DateTime? get lastCycleCompleted => _lastCycleCompleted;
 
-  HostState get overallState => aggregateHostStates(primaryHosts.map((host) => host.state));
+  HostState get overallState =>
+      aggregateHostStates(primaryHosts.map((host) => host.state));
 
   String get diagnosisTitle => switch (overallState) {
     HostState.online => 'Сетевая доступность подтверждена',
@@ -70,8 +78,11 @@ class MonitorService extends ChangeNotifier {
     if (_isCheckInProgress) {
       return 'Проверяем адреса с этого устройства. До завершения показаны последние результаты.';
     }
-    if (_lastCycleCompleted == null) return 'Запустите проверку сетевого доступа.';
-    final hasSecureEvidence = _hosts.any((host) => host.diagnosticResult?.hasSecureEvidence == true);
+    if (_lastCycleCompleted == null)
+      return 'Запустите проверку сетевого доступа.';
+    final hasSecureEvidence = _hosts.any(
+      (host) => host.diagnosticResult?.hasSecureEvidence == true,
+    );
     final prefix = hasSecureEvidence
         ? 'Защищённые соединения устанавливаются. '
         : 'Неудача контрольных соединений не доказывает отсутствие интернета. ';
@@ -84,14 +95,18 @@ class MonitorService extends ChangeNotifier {
 
   void startMonitoring({Duration interval = const Duration(seconds: 30)}) {
     if (_disposed || _isMonitoring) return;
-    if (interval <= Duration.zero) throw ArgumentError.value(interval, 'interval');
+    if (interval <= Duration.zero)
+      throw ArgumentError.value(interval, 'interval');
     _interval = interval;
     _isMonitoring = true;
-    _sessionId = '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
+    _sessionId =
+        '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
     if (_cycleCancellation?.isCancelled == true && _activeCycle != null) {
-      unawaited(_activeCycle!.then((_) {
-        if (_isMonitoring && !_disposed) unawaited(_checkAllHosts());
-      }));
+      unawaited(
+        _activeCycle!.then((_) {
+          if (_isMonitoring && !_disposed) unawaited(_checkAllHosts());
+        }),
+      );
     } else {
       unawaited(_checkAllHosts());
     }
@@ -107,9 +122,11 @@ class MonitorService extends ChangeNotifier {
     for (final token in _traces.values) {
       token.cancel();
     }
-    unawaited(HistoryService.flush().catchError((Object error) {
-      AppLogger.error('History flush failed', error: error);
-    }));
+    unawaited(
+      HistoryService.flush().catchError((Object error) {
+        AppLogger.error('History flush failed', error: error);
+      }),
+    );
     _notify();
   }
 
@@ -124,14 +141,20 @@ class MonitorService extends ChangeNotifier {
     _isCheckInProgress = true;
     final cancellation = CheckCancellation();
     _cycleCancellation = cancellation;
-    final sessionId = _sessionId ?? '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
+    final sessionId =
+        _sessionId ??
+        '${DateTime.now().microsecondsSinceEpoch}-${++_sessionCounter}';
     final watchdog = Timer(const Duration(seconds: 60), cancellation.cancel);
     _notify();
     unawaited(() async {
       try {
         await _runCycle(cancellation, sessionId);
       } catch (error, stackTrace) {
-        AppLogger.error('Monitoring cycle failed', error: error, stackTrace: stackTrace);
+        AppLogger.error(
+          'Monitoring cycle failed',
+          error: error,
+          stackTrace: stackTrace,
+        );
       } finally {
         watchdog.cancel();
         _isCheckInProgress = false;
@@ -151,7 +174,10 @@ class MonitorService extends ChangeNotifier {
     return completer.future;
   }
 
-  Future<void> _runCycle(CheckCancellation cancellation, String sessionId) async {
+  Future<void> _runCycle(
+    CheckCancellation cancellation,
+    String sessionId,
+  ) async {
     final results = <DiagnosticResult>[];
     final observations = <HistoryEntry>[];
     var next = 0;
@@ -163,16 +189,21 @@ class MonitorService extends ChangeNotifier {
           final status = _hosts[index];
           status.beginCheck();
           try {
-            final result = await cancellation.wait(_probe.check(status.host, cancellation));
-            if (_disposed || cancellation.isCancelled || result.cancelled) continue;
+            final result = await cancellation.wait(
+              _probe.check(status.host, cancellation),
+            );
+            if (_disposed || cancellation.isCancelled || result.cancelled)
+              continue;
             status.applyResult(result);
             results.add(result);
-            observations.add(HistoryEntry(
-              host: status.host,
-              timestamp: result.checkedAt,
-              state: result.state,
-              sessionId: sessionId,
-            ));
+            observations.add(
+              HistoryEntry(
+                host: status.host,
+                timestamp: result.checkedAt,
+                state: result.state,
+                sessionId: sessionId,
+              ),
+            );
           } on CheckCancelled {
             if (!_disposed) status.cancelCheck();
           } catch (error) {
@@ -193,12 +224,17 @@ class MonitorService extends ChangeNotifier {
         }
       }
     }
+
     await Future.wait(List.generate(_parallelChecks, (_) => worker()));
     if (_disposed || cancellation.isCancelled) return;
     // Positive evidence from Li Auto outweighs failure of external control hosts.
     // A failed set of probes alone is not proof that the entire internet is down.
-    _internetAvailable = results.any((result) => result.hasSecureEvidence) ? true : null;
-    _dnsAvailable = results.isEmpty ? null : results.any((result) => result.steps[0].available == true);
+    _internetAvailable = results.any((result) => result.hasSecureEvidence)
+        ? true
+        : null;
+    _dnsAvailable = results.isEmpty
+        ? null
+        : results.any((result) => result.steps[0].available == true);
     _lastCycleCompleted = DateTime.now();
     try {
       await HistoryService.saveObservations(observations);
@@ -213,7 +249,8 @@ class MonitorService extends ChangeNotifier {
     if (_disposed || _traces.containsKey(status)) return;
     final cancellation = CheckCancellation();
     _traces[status] = cancellation;
-    status.traceMessage = 'ICMP-маршрут. Отсутствие ответа узла не доказывает блокировку.';
+    status.traceMessage =
+        'ICMP-маршрут. Отсутствие ответа узла не доказывает блокировку.';
     status.hops = [];
     status.isTracing = true;
     final watchdog = Timer(const Duration(seconds: 65), cancellation.cancel);
@@ -225,16 +262,24 @@ class MonitorService extends ChangeNotifier {
       )).firstOrNull;
       if (target == null) throw const SocketException('Нет IP для трассировки');
       if (target.type != InternetAddressType.IPv4) {
-        throw UnsupportedError('Этот ICMP-адаптер не проверяет IPv6. HTTPS-проверка IPv6 поддерживается.');
+        throw UnsupportedError(
+          'Этот ICMP-адаптер не проверяет IPv6. HTTPS-проверка IPv6 поддерживается.',
+        );
       }
-      status.traceMessage = 'ICMP до ${target.address}. Молчание узла не означает блокировку.';
+      status.traceMessage =
+          'ICMP до ${target.address}. Молчание узла не означает блокировку.';
       for (var ttl = 1; ttl <= 20 && !cancellation.isCancelled; ttl++) {
         // Construct inside try: unsupported platforms may throw before streaming.
         final ping = Ping(target.address, count: 1, ttl: ttl, timeout: 2);
-        final removeCancel = cancellation.onCancel(() => unawaited(_stopPing(ping)));
+        final removeCancel = cancellation.onCancel(
+          () => unawaited(_stopPing(ping)),
+        );
         PingResponse? hopResponse;
         try {
-          hopResponse = await cancellation.wait(_readHop(ping), timeout: const Duration(seconds: 3));
+          hopResponse = await cancellation.wait(
+            _readHop(ping),
+            timeout: const Duration(seconds: 3),
+          );
         } on TimeoutException {
           // A silent hop is unknown, not a packet-loss measurement.
         } finally {
@@ -244,22 +289,30 @@ class MonitorService extends ChangeNotifier {
         if (_disposed || cancellation.isCancelled) break;
         final ip = hopResponse?.ip?.replaceAll(_bracketRegex, '').trim();
         final time = hopResponse?.time?.inMicroseconds;
-        status.updateHops((hops) => hops.add(HopInfo(
-          number: ttl,
-          ip: ip,
-          time: time == null ? null : time / 1000.0,
-        )));
+        status.updateHops(
+          (hops) => hops.add(
+            HopInfo(
+              number: ttl,
+              ip: ip,
+              time: time == null ? null : time / 1000.0,
+            ),
+          ),
+        );
         if (ip == target.address && hopResponse?.time != null) break;
       }
     } on CheckCancelled {
-      if (!_disposed) status.traceMessage = 'Трассировка остановлена. Сохранены полученные ответы.';
+      if (!_disposed)
+        status.traceMessage =
+            'Трассировка остановлена. Сохранены полученные ответы.';
     } catch (error) {
-      if (!_disposed) status.traceMessage = 'ICMP-проверка не завершена: $error';
+      if (!_disposed)
+        status.traceMessage = 'ICMP-проверка не завершена: $error';
     } finally {
       watchdog.cancel();
       _traces.remove(status);
       if (!_disposed) {
-        if (cancellation.isCancelled) status.traceMessage = 'Трассировка остановлена.';
+        if (cancellation.isCancelled)
+          status.traceMessage = 'Трассировка остановлена.';
         status.isTracing = false;
       }
     }
@@ -287,30 +340,45 @@ class MonitorService extends ChangeNotifier {
     final buffer = StringBuffer()
       ..writeln('Li Auto Monitor — сетевая диагностика')
       ..writeln(DateTime.now().toIso8601String())
-      ..writeln('Проверка с текущего устройства. Функции автомобиля не проверялись.')
+      ..writeln(
+        'Проверка с текущего устройства. Функции автомобиля не проверялись.',
+      )
       ..writeln('Режим: прямое соединение; HTTP-прокси не используется.')
       ..writeln('Общий вывод: $diagnosisTitle')
-      ..writeln('Защищённый доступ к внешним адресам: ${_formatBool(_internetAvailable)}')
+      ..writeln(
+        'Защищённый доступ к внешним адресам: ${_formatBool(_internetAvailable)}',
+      )
       ..writeln('DNS: ${_formatBool(_dnsAvailable)}');
     const names = ['DNS', 'TCP', 'TLS', 'HTTPS'];
     for (final status in _hosts) {
       buffer
         ..writeln()
-        ..writeln('${status.name} (${status.host})${status.isOptional ? ' [дополнительный адрес]' : ''}')
-        ..writeln('  Состояние: ${status.state.name}${status.isChecking ? ' (обновляется)' : ''}')
-        ..writeln('  Измерено: ${status.lastChecked?.toIso8601String() ?? 'нет данных'}');
+        ..writeln(
+          '${status.name} (${status.host})${status.isOptional ? ' [дополнительный адрес]' : ''}',
+        )
+        ..writeln(
+          '  Состояние: ${status.state.name}${status.isChecking ? ' (обновляется)' : ''}',
+        )
+        ..writeln(
+          '  Измерено: ${status.lastChecked?.toIso8601String() ?? 'нет данных'}',
+        );
       final steps = status.checkSteps;
       for (var i = 0; i < steps.length; i++) {
         buffer.writeln('  ${names[i]}: ${steps[i].label}. ${steps[i].detail}');
       }
-      if (status.resolvedIp != null) buffer.writeln('  IP: ${status.resolvedIp} (${status.diagnosticResult?.addressFamily ?? 'не определено'})');
+      if (status.resolvedIp != null)
+        buffer.writeln(
+          '  IP: ${status.resolvedIp} (${status.diagnosticResult?.addressFamily ?? 'не определено'})',
+        );
       for (final attempt in status.diagnosticResult?.attempts ?? <String>[]) {
         buffer.writeln('  Попытка: $attempt');
       }
       if (status.hops.isNotEmpty) {
         buffer.writeln('  ${status.traceMessage ?? 'ICMP-маршрут'}');
         for (final hop in status.hops) {
-          buffer.writeln('    ${hop.number}: ${hop.ip ?? 'нет ответа'} ${hop.time == null ? '' : '${hop.time} мс'}');
+          buffer.writeln(
+            '    ${hop.number}: ${hop.ip ?? 'нет ответа'} ${hop.time == null ? '' : '${hop.time} мс'}',
+          );
         }
       }
     }
@@ -318,7 +386,11 @@ class MonitorService extends ChangeNotifier {
     return buffer.toString().trimRight();
   }
 
-  String _formatBool(bool? value) => value == null ? 'не подтверждено' : value ? 'OK' : 'ошибка проверки';
+  String _formatBool(bool? value) => value == null
+      ? 'не подтверждено'
+      : value
+      ? 'OK'
+      : 'ошибка проверки';
 
   @override
   void dispose() {
@@ -333,9 +405,11 @@ class MonitorService extends ChangeNotifier {
       host.removeListener(_notify);
       if (_ownsHosts) host.dispose();
     }
-    unawaited(HistoryService.flush().catchError((Object error) {
-      AppLogger.error('History flush failed', error: error);
-    }));
+    unawaited(
+      HistoryService.flush().catchError((Object error) {
+        AppLogger.error('History flush failed', error: error);
+      }),
+    );
     super.dispose();
   }
 }

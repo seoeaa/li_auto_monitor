@@ -10,12 +10,14 @@ class TcpStatusIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     const labels = ['DNS', 'TCP 443', 'TLS', 'HTTPS'];
     final steps = host.checkSteps;
-    return Column(children: [
-      for (var index = 0; index < steps.length; index++) ...[
-        _buildStep(labels[index], steps[index]),
-        if (index < steps.length - 1) const SizedBox(height: 8),
+    return Column(
+      children: [
+        for (var index = 0; index < steps.length; index++) ...[
+          _buildStep(labels[index], steps[index]),
+          if (index < steps.length - 1) const SizedBox(height: 8),
+        ],
       ],
-    ]);
+    );
   }
 
   Widget _buildStep(String label, CheckStep value) {
@@ -41,17 +43,44 @@ class TcpStatusIndicator extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         border: Border.all(color: AppTheme.borderSubtle),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('$label · ${value.label}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 3),
-          Text(value.detail, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-          if (value.milliseconds != null)
-            Text('${value.milliseconds} мс', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-        ])),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$label · ${value.label}',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value.detail,
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+                if (value.milliseconds != null)
+                  Text(
+                    '${value.milliseconds} мс',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

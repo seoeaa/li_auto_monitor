@@ -74,10 +74,7 @@ class AppTheme {
     return BoxDecoration(
       color: backgroundCard,
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: borderColor ?? borderSubtle,
-        width: 1,
-      ),
+      border: Border.all(color: borderColor ?? borderSubtle, width: 1),
     );
   }
 

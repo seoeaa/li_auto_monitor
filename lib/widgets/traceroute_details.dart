@@ -15,9 +15,7 @@ class TracerouteDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: AppTheme.borderSubtle, width: 1),
-        ),
+        border: Border(top: BorderSide(color: AppTheme.borderSubtle, width: 1)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       child: Column(
@@ -71,7 +69,7 @@ class TracerouteDetails extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -85,7 +83,8 @@ class TracerouteDetails extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Дополнительная техническая проверка',
+                      host.traceMessage ??
+                          'ICMP: отсутствие ответа не доказывает блокировку',
                       style: TextStyle(
                         color: AppTheme.textTertiary,
                         fontSize: 10,
@@ -97,7 +96,7 @@ class TracerouteDetails extends StatelessWidget {
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: host.isTracing
-                    ? null
+                    ? () => context.read<MonitorService>().stopTrace(host)
                     : () => context.read<MonitorService>().traceHost(host),
                 icon: host.isTracing
                     ? const SizedBox(
@@ -106,7 +105,7 @@ class TracerouteDetails extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.route_outlined, size: 16),
-                label: Text(host.isTracing ? 'Проверяем' : 'Проверить'),
+                label: Text(host.isTracing ? 'Остановить' : 'Проверить'),
               ),
             ],
           ),
@@ -115,7 +114,8 @@ class TracerouteDetails extends StatelessWidget {
             const _RoutePlaceholder(text: 'Ищем сетевые узлы...')
           else if (host.hops.isEmpty)
             const _RoutePlaceholder(
-              text: 'Маршрут ещё не проверялся. Запустите его при проблемах со связью.',
+              text:
+                  'Маршрут ещё не проверялся. Запустите его при проблемах со связью.',
             )
           else
             Container(

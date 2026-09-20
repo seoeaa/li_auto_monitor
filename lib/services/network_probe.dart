@@ -67,7 +67,8 @@ class NetworkProbe {
     );
     Duration remaining() {
       final left = hostTimeout - watch.elapsed;
-      if (left <= Duration.zero) throw TimeoutException('Лимит времени проверки');
+      if (left <= Duration.zero)
+        throw TimeoutException('Лимит времени проверки');
       return left < stageTimeout ? left : stageTimeout;
     }
 
@@ -77,15 +78,22 @@ class NetworkProbe {
       addresses = await cancellation.wait(lookup(host), timeout: remaining());
       // Preserve OS preference, while avoiding duplicate address attempts.
       final seen = <String>{};
-      addresses = addresses.where((address) => seen.add(address.address)).toList();
-      if (addresses.isEmpty) throw const SocketException('DNS не вернул адресов');
+      addresses = addresses
+          .where((address) => seen.add(address.address))
+          .toList();
+      if (addresses.isEmpty)
+        throw const SocketException('DNS не вернул адресов');
       steps[0] = CheckStep(
         CheckState.success,
         'DNS: получено адресов ${addresses.length}.',
         milliseconds: watch.elapsedMilliseconds,
       );
     } on CheckCancelled {
-      return DiagnosticResult(steps: steps, checkedAt: DateTime.now(), cancelled: true);
+      return DiagnosticResult(
+        steps: steps,
+        checkedAt: DateTime.now(),
+        cancelled: true,
+      );
     } catch (error) {
       steps[0] = CheckStep(CheckState.failure, _error('DNS', error));
       return DiagnosticResult(steps: steps, checkedAt: DateTime.now());
@@ -94,7 +102,11 @@ class NetworkProbe {
     DiagnosticResult? best;
     for (final address in addresses) {
       if (cancellation.isCancelled) {
-        return DiagnosticResult(steps: steps, checkedAt: DateTime.now(), cancelled: true);
+        return DiagnosticResult(
+          steps: steps,
+          checkedAt: DateTime.now(),
+          cancelled: true,
+        );
       }
       if (watch.elapsed >= hostTimeout) {
         attempts.add('Остальные адреса не проверены: исчерпан лимит времени.');
@@ -115,10 +127,20 @@ class NetworkProbe {
       if (result.httpStatusCode != null) return result.withAttempts(attempts);
       if (best == null || _progress(result) > _progress(best)) best = result;
     }
-    return (best ?? DiagnosticResult(
-      steps: [steps[0], const CheckStep(CheckState.failure, 'Исчерпан лимит времени TCP.'), steps[2], steps[3]],
-      checkedAt: DateTime.now(),
-    )).withAttempts(attempts);
+    return (best ??
+            DiagnosticResult(
+              steps: [
+                steps[0],
+                const CheckStep(
+                  CheckState.failure,
+                  'Исчерпан лимит времени TCP.',
+                ),
+                steps[2],
+                steps[3],
+              ],
+              checkedAt: DateTime.now(),
+            ))
+        .withAttempts(attempts);
   }
 
   int _progress(DiagnosticResult result) =>
@@ -148,8 +170,7 @@ class NetworkProbe {
     ConnectionTask<Socket>? task;
     final stageWatch = Stopwatch()..start();
     final client = HttpClient(context: securityContext)
-      ..findProxy = (_) => 'DIRECT'
-      ..autoUncompress = false;
+      ..findProxy = (_) => 'DIRECT'..autoUncompress = false;
 
     void close() {
       if (closed) return;
@@ -158,6 +179,7 @@ class NetworkProbe {
       task?.cancel();
       socket?.destroy();
     }
+
     final removeCancel = cancellation.onCancel(close);
 
     // HttpClient performs TLS on this exact socket. The original URI supplies
@@ -205,9 +227,15 @@ class NetworkProbe {
       request.followRedirects = false;
       request.persistentConnection = false;
       request.headers.set(HttpHeaders.userAgentHeader, 'LiAutoMonitor/1.1');
-      final response = await cancellation.wait(request.close(), timeout: remaining());
+      final response = await cancellation.wait(
+        request.close(),
+        timeout: remaining(),
+      );
       statusCode = response.statusCode;
-      steps[3] = classifyHttpStatus(statusCode, milliseconds: stageWatch.elapsedMilliseconds);
+      steps[3] = classifyHttpStatus(
+        statusCode,
+        milliseconds: stageWatch.elapsedMilliseconds,
+      );
       // HEAD needs only headers. Do not wait for a remote body or graceful EOF.
     } on CheckCancelled {
       cancelled = true;

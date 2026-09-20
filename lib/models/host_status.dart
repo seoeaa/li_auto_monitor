@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-
-enum HostState { online, down, unknown, degraded, checking }
+import 'diagnostic_result.dart';
+export 'diagnostic_result.dart';
 
 class HopInfo {
   final int number;
@@ -47,6 +47,7 @@ class HostStatus extends ChangeNotifier {
   final String category;
   final String name;
   final String host;
+  final bool isOptional;
   HostState _state;
   double? _rtt;
   String? _errorMessage;
@@ -66,6 +67,7 @@ class HostStatus extends ChangeNotifier {
     required this.category,
     required this.name,
     required this.host,
+    this.isOptional = false,
     HostState state = HostState.unknown,
     double? rtt,
     String? errorMessage,
@@ -94,6 +96,61 @@ class HostStatus extends ChangeNotifier {
        _isHttpAvailable = isHttpAvailable,
        _httpStatusCode = httpStatusCode,
        _diagnosis = diagnosis;
+
+  DiagnosticResult? diagnosticResult;
+  String? traceMessage;
+  bool _isChecking = false;
+  HostState? _stateBeforeCheck;
+  bool get isChecking => _isChecking;
+
+  List<CheckStep> get checkSteps {
+    if (diagnosticResult != null) return diagnosticResult!.steps;
+    return List.generate(
+      4,
+      (index) => CheckStep(
+        _isChecking && index == 0 ? CheckState.checking : CheckState.unknown,
+        'Нет завершённого измерения.',
+      ),
+    );
+  }
+
+  void beginCheck() {
+    if (_isChecking) return;
+    _isChecking = true;
+    _stateBeforeCheck = _state;
+    if (_lastChecked == null) _state = HostState.checking;
+    notifyListeners();
+  }
+
+  void cancelCheck() {
+    if (!_isChecking) return;
+    _isChecking = false;
+    _state = _stateBeforeCheck ?? HostState.unknown;
+    notifyListeners();
+  }
+
+  void applyResult(DiagnosticResult result) {
+    if (result.cancelled) {
+      cancelCheck();
+      return;
+    }
+    diagnosticResult = result;
+    _isChecking = false;
+    _state = result.state;
+    _isDnsAvailable = result.steps[0].available;
+    _isTcpAvailable = result.steps[1].available == true;
+    _isTlsAvailable = result.steps[2].available;
+    _isHttpAvailable = result.steps[3].available;
+    _httpStatusCode = result.httpStatusCode;
+    if (_resolvedIp != result.resolvedIp) _resolvedCountry = null;
+    _resolvedIp = result.resolvedIp;
+    // Kept for compatibility; the UI/report explicitly label this as TCP time.
+    _rtt = result.steps[1].milliseconds?.toDouble();
+    _diagnosis = result.summary;
+    _errorMessage = result.state == HostState.online ? null : result.summary;
+    _lastChecked = result.checkedAt;
+    notifyListeners();
+  }
 
   HostState get state => _state;
   set state(HostState value) {
@@ -203,6 +260,7 @@ class HostStatus extends ChangeNotifier {
     'category': category,
     'name': name,
     'host': host,
+    'isOptional': isOptional,
     'state': _state.index,
     'rtt': _rtt,
     'errorMessage': _errorMessage,
@@ -228,6 +286,7 @@ class HostStatus extends ChangeNotifier {
       category: json['category'],
       name: json['name'],
       host: json['host'],
+      isOptional: json['isOptional'] == true,
       state: state,
       rtt: json['rtt']?.toDouble(),
       errorMessage: json['errorMessage'],

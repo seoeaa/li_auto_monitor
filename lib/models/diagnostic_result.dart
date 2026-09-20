@@ -95,7 +95,8 @@ CheckStep classifyHttpStatus(int statusCode, {int? milliseconds}) {
   final CheckState state;
   if (statusCode >= 200 && statusCode < 300) {
     state = CheckState.success;
-    detail = 'HTTP $statusCode: адрес ответил. Функции автомобиля не проверялись.';
+    detail =
+        'HTTP $statusCode: адрес ответил. Функции автомобиля не проверялись.';
   } else {
     state = CheckState.warning;
     detail = switch (statusCode) {
@@ -107,7 +108,8 @@ CheckStep classifyHttpStatus(int statusCode, {int? milliseconds}) {
       405 => 'HTTP 405: метод HEAD не поддерживается. HTTPS доступен.',
       429 => 'HTTP 429: сервер ограничил частоту запросов.',
       >= 500 && < 600 => 'HTTP $statusCode: сервер ответил ошибкой.',
-      _ => 'HTTP $statusCode: ответ требует проверки; это не ошибка соединения.',
+      _ =>
+        'HTTP $statusCode: ответ требует проверки; это не ошибка соединения.',
     };
   }
   return CheckStep(state, detail, milliseconds: milliseconds);
@@ -117,7 +119,9 @@ HostState aggregateHostStates(Iterable<HostState> states) {
   final values = states.toList();
   if (values.isEmpty) return HostState.unknown;
   if (values.every((state) => state == HostState.down)) return HostState.down;
-  if (values.any((state) => state == HostState.down || state == HostState.degraded)) {
+  if (values.any(
+    (state) => state == HostState.down || state == HostState.degraded,
+  )) {
     return HostState.degraded;
   }
   if (values.contains(HostState.checking)) return HostState.checking;
