@@ -368,14 +368,6 @@ class MonitorService extends ChangeNotifier {
       }
     }
 
-    status.hops = [
-      HopInfo(
-        number: 1,
-        ip: status.resolvedIp,
-        time: status.rtt,
-        country: status.resolvedCountry,
-      ),
-    ];
   }
 
   Future<void> traceHost(HostStatus status) async {
